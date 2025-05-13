@@ -163,9 +163,11 @@ const cardSetsAreEqual = (sets1?: readonly CardSet[], sets2?: readonly CardSet[]
         name: set.name,
         theme: set.theme,
         tags: [...set.tags].sort(),
-        updatedAt: set.updatedAt?.getTime() ?? 0,
+        updatedAt: set.updatedAt?.getTime() ?? 0, // Compare by time value
         cardCount: set.cards.length,
-        // For a very deep comparison, you'd iterate through cards too
+        // For a very deep comparison, you'd iterate through cards too,
+        // or hash them, but this is generally good enough for store updates.
+        // Also comparing a hash of card IDs could be an option.
     });
 
     const sortedSets1 = [...sets1].sort((a, b) => a.id.localeCompare(b.id)).map(normalizeSet);
@@ -178,8 +180,8 @@ const cardSetsAreEqual = (sets1?: readonly CardSet[], sets2?: readonly CardSet[]
             s1.id !== s2.id ||
             s1.name !== s2.name ||
             s1.theme !== s2.theme ||
-            s1.updatedAt !== s2.updatedAt ||
-            s1.cardCount !== s2.cardCount || // Basic card check
+            s1.updatedAt !== s2.updatedAt || // Compare timestamp
+            s1.cardCount !== s2.cardCount ||
             !arraysAreEqualPrimitive(s1.tags, s2.tags)
         ) {
             return false;
@@ -187,6 +189,7 @@ const cardSetsAreEqual = (sets1?: readonly CardSet[], sets2?: readonly CardSet[]
     }
     return true;
 };
+
 
 // Internal helper for library filtering logic
 const applyLibraryFilters = (allSets: readonly CardSet[], filterTheme: string | null, filterTags: readonly string[]): CardSet[] => {
@@ -207,9 +210,9 @@ export const initializeStore = (
   initProps?: Partial<Store>
 ): StoreApi<Store> => {
   const DEFAULT_PROPS: Store = {
-    generate: { ...initialGenerateState } as GenerateState & GenerateActions,
-    library: { ...initialLibraryState } as LibraryState & LibraryActions,
-    study: { ...initialStudyState } as StudyState & StudyActions,
+    generate: { ...initialGenerateState } as GenerateState & GenerateActions, // Cast to satisfy TS
+    library: { ...initialLibraryState } as LibraryState & LibraryActions, // Cast to satisfy TS
+    study: { ...initialStudyState } as StudyState & StudyActions, // Cast to satisfy TS
   };
 
   return createStore<Store>()(
@@ -427,11 +430,14 @@ export const initializeStore = (
         flipCard: () => set((state) => {
              if (state.study.currentCard) {
                 state.study.isFrontVisible = !state.study.isFrontVisible;
-                 // Reset hint/details visibility when flipping to side that doesn't show them
-                if (state.study.isFrontVisible) {
-                  // state.study.currentDetails = null; // Don't clear, let user hide explicitly
-                } else {
-                  // state.study.currentHint = null; // Don't clear, let user hide explicitly
+                 // When flipping, if the newly shown side has cached hint/details, display them.
+                 // If not, they remain null until fetched.
+                if (state.study.isFrontVisible) { // Switched to front
+                    state.study.currentHint = state.study.currentCard?.hint || null;
+                    // state.study.currentDetails = null; // Details are for back, effectively hidden
+                } else { // Switched to back
+                    state.study.currentDetails = state.study.currentCard?.details || null;
+                    // state.study.currentHint = null; // Hints are for front, effectively hidden
                 }
             }
          }),
@@ -473,23 +479,27 @@ export const initializeStore = (
             }
         }),
         fetchHint: async (forceRegenerate = false) => {
-           const { currentCard: cardFromGet, isHintLoading: currentIsHintLoading, currentHint: existingHint } = get().study;
+           const { currentCard: cardFromGet, isHintLoading: currentIsHintLoading } = get().study;
 
            if (!cardFromGet || (currentIsHintLoading && !forceRegenerate)) return;
 
-           if (!forceRegenerate && existingHint && cardFromGet.hint === existingHint) { // Use existingHint from state
-             set(state => {
-               state.study.isHintLoading = false; // Ensure loading is off
-               state.study.error = null;
-             });
-             return;
-           }
+            // If not forcing regeneration and the card already has a hint (cached), display it.
+            if (!forceRegenerate && cardFromGet.hint) {
+                set(state => {
+                    state.study.currentHint = cardFromGet.hint;
+                    state.study.isHintLoading = false;
+                    state.study.error = null;
+                });
+                return;
+            }
 
+           // Proceed to fetch if forcing regeneration or no cached hint on the card object
            set(state => {
              state.study.isHintLoading = true;
              state.study.error = null;
-             if (forceRegenerate || !existingHint) { // If forcing or no hint in state, clear it
-               state.study.currentHint = null;
+             // Clear currentHint for display if forcing or no existing hint on card (to show loading)
+             if (forceRegenerate || !cardFromGet.hint) {
+                 state.study.currentHint = null;
              }
            });
 
@@ -507,7 +517,7 @@ export const initializeStore = (
                 const result = await response.json();
 
                set(state => {
-                 state.study.currentHint = result.hint;
+                 state.study.currentHint = result.hint; // Display the new hint
                  // Update the card in the currentDeck and originalDeck as well for persistence within session
                  const cardId = state.study.currentCard?.id;
                  if (cardId) {
@@ -515,7 +525,8 @@ export const initializeStore = (
                     if (deckIdx > -1) state.study.currentDeck[deckIdx].hint = result.hint;
                     const originalIdx = state.study.originalDeck.findIndex(c => c.id === cardId);
                     if (originalIdx > -1) state.study.originalDeck[originalIdx].hint = result.hint;
-                    if (state.study.currentCard) state.study.currentCard.hint = result.hint; // Update the active card display
+                    // Ensure the currentCard object in state also reflects this new hint
+                    if (state.study.currentCard) state.study.currentCard.hint = result.hint;
                  }
                });
            } catch (error: any) {
@@ -526,26 +537,30 @@ export const initializeStore = (
            }
         },
         hideHint: () => set((state) => {
-            state.study.currentHint = null;
+            state.study.currentHint = null; // Clear from display, but card.hint remains cached
         }),
         fetchDetails: async (forceRegenerate = false) => {
-           const { currentCard: cardFromGet, isDetailsLoading: currentIsDetailsLoading, currentDetails: existingDetails } = get().study;
+           const { currentCard: cardFromGet, isDetailsLoading: currentIsDetailsLoading } = get().study;
 
            if (!cardFromGet || (currentIsDetailsLoading && !forceRegenerate)) return;
 
-           if (!forceRegenerate && existingDetails && cardFromGet.details === existingDetails) { // Use existingDetails from state
-             set(state => {
-               state.study.isDetailsLoading = false; // Ensure loading is off
-               state.study.error = null;
-             });
-             return;
-           }
+           // If not forcing regeneration and the card already has details (cached), display it.
+            if (!forceRegenerate && cardFromGet.details) {
+                set(state => {
+                    state.study.currentDetails = cardFromGet.details;
+                    state.study.isDetailsLoading = false;
+                    state.study.error = null;
+                });
+                return;
+            }
 
+            // Proceed to fetch if forcing regeneration or no cached details on the card object
             set(state => {
               state.study.isDetailsLoading = true;
               state.study.error = null;
-              if (forceRegenerate || !existingDetails) { // If forcing or no details in state, clear it
-                state.study.currentDetails = null;
+              // Clear currentDetails for display if forcing or no existing details on card (to show loading)
+              if (forceRegenerate || !cardFromGet.details) {
+                  state.study.currentDetails = null;
               }
             });
 
@@ -563,7 +578,7 @@ export const initializeStore = (
                  const result = await response.json();
 
                set(state => {
-                 state.study.currentDetails = result.details;
+                 state.study.currentDetails = result.details; // Display the new details
                  // Update the card in the currentDeck and originalDeck for persistence
                  const cardId = state.study.currentCard?.id;
                  if (cardId) {
@@ -571,7 +586,8 @@ export const initializeStore = (
                     if (deckIdx > -1) state.study.currentDeck[deckIdx].details = result.details;
                     const originalIdx = state.study.originalDeck.findIndex(c => c.id === cardId);
                     if (originalIdx > -1) state.study.originalDeck[originalIdx].details = result.details;
-                    if (state.study.currentCard) state.study.currentCard.details = result.details; // Update active card display
+                    // Ensure the currentCard object in state also reflects this new detail
+                    if (state.study.currentCard) state.study.currentCard.details = result.details;
                  }
                });
            } catch (error: any) {
@@ -582,7 +598,7 @@ export const initializeStore = (
            }
         },
         hideDetails: () => set((state) => {
-            state.study.currentDetails = null;
+            state.study.currentDetails = null; // Clear from display, but card.details remains cached
         }),
          shuffleDeck: () => set((state) => {
              const newShuffledDeck = [...state.study.originalDeck].sort(() => Math.random() - 0.5);
