@@ -1,3 +1,4 @@
+
 import { createContext, useContext } from 'react';
 import { createStore, useStore as useZustandStore, type StoreApi } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
@@ -156,6 +157,7 @@ const createFlashGeniusStore = (
       // --- Generate Store Implementation ---
       generate: {
         ...initialGenerateState,
+        ...(initProps?.generate),
         setInputType: (type) => set((state) => { state.generate.inputType = type; }),
         setInputValue: (value) => set((state) => { state.generate.inputValue = value; }),
         setGenerationOptions: (options) => set((state) => {
@@ -189,14 +191,15 @@ const createFlashGeniusStore = (
             let apiInput: GenerateFlashcardsInput;
 
             if (inputType === 'file' && inputValue instanceof File) {
-              // Handle file upload - simplified: assuming server handles file reading
-              // In a real app, you might read the file content here or send the file object
-              // For now, let's assume the server route can handle FormData or requires content
-              const fileContent = await inputValue.text(); // Example: Read text file
-              apiInput = { inputType: 'text', inputValue: fileContent }; // Adjust based on actual API route capability
+              // For file input, we need to read its content.
+              // Assuming it's a text-based file for now.
+              // For image files, this would need to be a data URI.
+              const fileContent = await inputValue.text(); // Simplification, might need to handle different file types
+              apiInput = { inputType: 'text', inputValue: fileContent }; // Sending as text
             } else if (inputType === 'url' && typeof inputValue === 'string') {
-              // Optional: Prepend Jina reader URL if needed by the API route
-              // const targetUrl = inputValue.startsWith('http') ? `${JINA_READER_URL_PREFIX}${inputValue}` : inputValue;
+              // Prefix with Jina Reader URL if it's a general web URL
+              // This logic might need adjustment based on specific URL types to avoid double-prefixing
+              // const processedUrl = inputValue.startsWith('http') ? `${JINA_READER_URL_PREFIX}${inputValue}` : inputValue;
               apiInput = { inputType: 'url', inputValue: inputValue };
             } else if (inputType === 'text' && typeof inputValue === 'string') {
               apiInput = { inputType: 'text', inputValue: inputValue };
@@ -204,11 +207,12 @@ const createFlashGeniusStore = (
               throw new Error('Invalid input type or value.');
             }
 
-            // Call the Next.js API route which internally calls the Genkit flow
+            // const result = await generateFlashcards(apiInput); // Direct flow call
+
             const response = await fetch(API_ENDPOINTS.GENERATE_CARDS, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(apiInput), // Send the prepared input
+              body: JSON.stringify(apiInput), // Send the processed input
             });
 
             if (!response.ok) {
@@ -245,7 +249,7 @@ const createFlashGeniusStore = (
             state.generate.previewCards.splice(index, 1);
         }),
         resetGenerator: () => set((state) => {
-            state.generate = { ...state.generate, ...initialGenerateState };
+            state.generate = { ...state.generate, ...initialGenerateState, cardSetTags: [], previewCards: [] }; // Ensure arrays are also reset
          }),
 
       },
@@ -253,26 +257,46 @@ const createFlashGeniusStore = (
       // --- Library Store Implementation ---
       library: {
         ...initialLibraryState,
-        setAllCardSets: (sets) => set((state) => {
-            state.library.allCardSets = sets;
-            get().library.applyFilters(); // Apply filters whenever the source data changes
-         }),
+        ...(initProps?.library),
+        setAllCardSets: (newAllCardSets) => {
+          set((state) => {
+            state.library.allCardSets = newAllCardSets;
+            // state.library.filteredCardSets = newAllCardSets; // Initialize filtered list
+            // Instead of directly setting, call applyFilters to ensure consistency
+          });
+          get().library.applyFilters(); // Apply filters whenever allCardSets changes
+        },
         setAvailableThemes: (themes) => set((state) => { state.library.availableThemes = themes; }),
         setAvailableTags: (tags) => set((state) => { state.library.availableTags = tags; }),
-        setFilterTheme: (theme) => set((state) => {
-            state.library.filterTheme = theme;
-            get().library.applyFilters();
-         }),
-        addFilterTag: (tag) => set((state) => {
+        setFilterTheme: (theme) => {
+          set((state) => { state.library.filterTheme = theme; });
+          get().library.applyFilters();
+        },
+        addFilterTag: (tag) => {
+          let needsFilterUpdate = false;
+          set((state) => {
             if (!state.library.filterTags.includes(tag)) {
-                state.library.filterTags.push(tag);
-                get().library.applyFilters();
+              state.library.filterTags.push(tag);
+              needsFilterUpdate = true;
             }
-         }),
-        removeFilterTag: (tag) => set((state) => {
-            state.library.filterTags = state.library.filterTags.filter(t => t !== tag);
+          });
+          if (needsFilterUpdate) { // Only call applyFilters if the tags actually changed
             get().library.applyFilters();
-         }),
+          }
+        },
+        removeFilterTag: (tag) => {
+          let needsFilterUpdate = false;
+          set((state) => {
+            const initialLength = state.library.filterTags.length;
+            state.library.filterTags = state.library.filterTags.filter(t => t !== tag);
+            if (state.library.filterTags.length !== initialLength) {
+              needsFilterUpdate = true;
+            }
+          });
+           if (needsFilterUpdate) { // Only call applyFilters if the tags actually changed
+            get().library.applyFilters();
+          }
+        },
         applyFilters: () => set((state) => {
             let sets = state.library.allCardSets;
             if (state.library.filterTheme) {
@@ -282,18 +306,21 @@ const createFlashGeniusStore = (
                  const tagSet = new Set(state.library.filterTags);
                  sets = sets.filter(set => set.tags.some(tag => tagSet.has(tag)));
             }
-             state.library.filteredCardSets = sets;
+            state.library.filteredCardSets = sets;
         }),
-         resetFilters: () => set((state) => {
+        resetFilters: () => {
+          set((state) => {
             state.library.filterTheme = null;
             state.library.filterTags = [];
-            state.library.filteredCardSets = state.library.allCardSets; // Reset to all
-         }),
+          });
+          get().library.applyFilters();
+        },
       },
 
       // --- Study Store Implementation ---
       study: {
         ...initialStudyState,
+        ...(initProps?.study),
         startStudySession: (cardSets) => set((state) => {
            const allCards = cardSets.flatMap(set => set.cards);
            const shuffledCards = [...allCards].sort(() => Math.random() - 0.5); // Simple shuffle
@@ -331,10 +358,12 @@ const createFlashGeniusStore = (
                 state.study.isHintLoading = false;
                 state.study.isDetailsLoading = false;
             } else {
-                // End of deck? Loop or finish? For now, just stay on last card.
-                // Optionally reset or show completion message.
-                state.study.currentCardIndex = -1; // Indicate end
+                // End of deck
+                state.study.currentCardIndex = -1; // Signal end of session
                 state.study.currentCard = null;
+                // state.study.isFrontVisible = true;
+                // state.study.currentHint = null;
+                // state.study.currentDetails = null;
             }
         }),
         previousCard: () => set((state) => {
@@ -351,13 +380,13 @@ const createFlashGeniusStore = (
         }),
         fetchHint: async () => {
            const currentCard = get().study.currentCard;
-           if (!currentCard || get().study.isHintLoading || get().study.currentHint) return; // Don't fetch if loading or already have hint
+           if (!currentCard || get().study.isHintLoading || get().study.currentHint) return; // Don't fetch if already have one
 
            set(state => { state.study.isHintLoading = true; state.study.error = null; });
 
            try {
                const input: RequestAiGeneratedHintInput = { front: currentCard.front, back: currentCard.back };
-               // Call API route
+                // const result = await requestAiGeneratedHint(input); // Direct flow call
                 const response = await fetch(API_ENDPOINTS.GENERATE_HINT, {
                    method: 'POST',
                    headers: { 'Content-Type': 'application/json' },
@@ -370,14 +399,6 @@ const createFlashGeniusStore = (
                 const result = await response.json();
 
                set(state => { state.study.currentHint = result.hint; });
-
-                // Optional: Cache hint on the card in the deck?
-                // This would require updating the currentDeck array, which Immer handles.
-                // set(state => {
-                //     const cardInDeck = state.study.currentDeck.find(c => c.id === currentCard.id);
-                //     if (cardInDeck) cardInDeck.hint = result.hint;
-                // });
-
            } catch (error: any) {
                console.error("Error fetching hint:", error);
                set(state => { state.study.error = error.message || 'Failed to fetch hint.'; });
@@ -387,13 +408,13 @@ const createFlashGeniusStore = (
         },
         fetchDetails: async () => {
            const currentCard = get().study.currentCard;
-           if (!currentCard || get().study.isDetailsLoading || get().study.currentDetails) return;
+           if (!currentCard || get().study.isDetailsLoading || get().study.currentDetails) return; // Don't fetch if already have one
 
             set(state => { state.study.isDetailsLoading = true; state.study.error = null; });
 
            try {
                const input: ProvideDetailedExplanationInput = { front: currentCard.front, back: currentCard.back };
-                // Call API route
+                // const result = await provideDetailedExplanation(input); // Direct flow call
                 const response = await fetch(API_ENDPOINTS.GENERATE_DETAILS, {
                    method: 'POST',
                    headers: { 'Content-Type': 'application/json' },
@@ -406,13 +427,6 @@ const createFlashGeniusStore = (
                 const result = await response.json();
 
                set(state => { state.study.currentDetails = result.details; });
-
-                 // Optional: Cache details on the card in the deck
-                // set(state => {
-                //     const cardInDeck = state.study.currentDeck.find(c => c.id === currentCard.id);
-                //     if (cardInDeck) cardInDeck.details = result.details;
-                // });
-
            } catch (error: any) {
                console.error("Error fetching details:", error);
                set(state => { state.study.error = error.message || 'Failed to fetch details.'; });
@@ -425,6 +439,7 @@ const createFlashGeniusStore = (
             state.study.currentDetails = null;
             state.study.isHintLoading = false;
             state.study.isDetailsLoading = false;
+            state.study.error = null; // Also clear error related to hint/details
          }),
          shuffleDeck: () => set((state) => {
              state.study.currentDeck = [...state.study.originalDeck].sort(() => Math.random() - 0.5);
@@ -433,6 +448,9 @@ const createFlashGeniusStore = (
              state.study.isFrontVisible = true;
              state.study.currentHint = null;
              state.study.currentDetails = null;
+             state.study.isHintLoading = false;
+             state.study.isDetailsLoading = false;
+             state.study.error = null;
         }),
         resetStudySession: () => set((state) => {
              state.study = { ...state.study, ...initialStudyState };
@@ -460,3 +478,4 @@ export const useStore = <T>(selector: (store: Store) => T): T => {
 // Initialize store function (used in provider)
 export const initializeStore = (preloadedState: Partial<Store> = {}) =>
   createFlashGeniusStore(preloadedState);
+
