@@ -7,29 +7,46 @@ import { StudySuggestions } from '@/components/features/dashboard/StudySuggestio
 import { QuickAccess } from '@/components/features/dashboard/QuickAccess';
 import { useIndexedDB } from '@/lib/hooks/useIndexedDB';
 import { useStore } from '@/lib/store';
-import { Skeleton } from '@/components/ui/skeleton'; // For loading state
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function DashboardPage() {
   const { allCardSets: dbAllCardSets, availableThemes: dbAvailableThemes, availableTags: dbAvailableTags, isLoading: isDbLoading } = useIndexedDB();
-  const { setAllCardSets, setAvailableThemes, setAvailableTags, libraryLoading, currentAllCardSets } = useStore((state) => ({
+  const {
+      setAllCardSets,
+      setAvailableThemes,
+      setAvailableTags,
+      libraryLoading,
+      currentAllCardSets,
+      currentAvailableThemes,
+      currentAvailableTags,
+  } = useStore((state) => ({
       setAllCardSets: state.library.setAllCardSets,
       setAvailableThemes: state.library.setAvailableThemes,
       setAvailableTags: state.library.setAvailableTags,
       libraryLoading: state.library.isLoading,
-      currentAllCardSets: state.library.allCardSets, // Get current store value for comparison if needed
+      currentAllCardSets: state.library.allCardSets,
+      currentAvailableThemes: state.library.availableThemes,
+      currentAvailableTags: state.library.availableTags,
   }));
 
   const isLoading = isDbLoading || libraryLoading;
 
   useEffect(() => {
       if (!isDbLoading) {
+          // The store setters (setAllCardSets, etc.) now have internal guards
+          // to prevent updates if data is identical.
           setAllCardSets(dbAllCardSets ?? []);
           setAvailableThemes(dbAvailableThemes ?? []);
           setAvailableTags(dbAvailableTags ?? []);
       }
-  // Zustand setters (setAllCardSets, etc.) are stable and don't need to be in the dependency array.
-  // The store itself now has guards to prevent unnecessary updates if data is identical.
-  }, [isDbLoading, dbAllCardSets, dbAvailableThemes, dbAvailableTags]);
+  // Dependencies:
+  // - isDbLoading: Triggers effect when loading state changes.
+  // - dbAllCardSets, dbAvailableThemes, dbAvailableTags: Data from IndexedDB. Effect runs if these change.
+  // - Setters (setAllCardSets, etc.): Stable functions from Zustand, included for exhaustiveness/linting.
+  // Not including currentAllCardSets, etc. here to avoid direct loops if setters didn't have guards.
+  // The guards within the setters are the primary defense against infinite loops.
+  }, [isDbLoading, dbAllCardSets, dbAvailableThemes, dbAvailableTags, setAllCardSets, setAvailableThemes, setAvailableTags]);
+
 
   return (
     <div>
@@ -49,7 +66,7 @@ export default function DashboardPage() {
                     <Skeleton className="h-16 w-full" />
                 </div>
              ) : (
-                <StudySuggestions cardSets={currentAllCardSets} /> // Use card sets from store
+                <StudySuggestions cardSets={currentAllCardSets} />
              )}
          </section>
 
@@ -62,7 +79,7 @@ export default function DashboardPage() {
                      <Skeleton className="h-16 w-full" />
                  </div>
                ) : (
-                 <RecentActivity cardSets={currentAllCardSets} /> // Use card sets from store
+                 <RecentActivity cardSets={currentAllCardSets} />
                )}
          </section>
 

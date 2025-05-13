@@ -6,7 +6,7 @@ import { CardSetList } from '@/components/features/library/CardSetList';
 import { FilterControls } from '@/components/features/library/FilterControls';
 import { useStore } from '@/lib/store';
 import { useIndexedDB } from '@/lib/hooks/useIndexedDB';
-import { Skeleton } from '@/components/ui/skeleton'; // For loading state
+import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Info } from 'lucide-react';
 
@@ -18,24 +18,32 @@ export default function LibraryPage() {
       setAvailableThemes,
       setAvailableTags,
       libraryLoading,
+      // Removed current... from here as useEffect relies on store setter guards
   } = useStore((state) => ({
       filteredCardSets: state.library.filteredCardSets,
       setAllCardSets: state.library.setAllCardSets,
       setAvailableThemes: state.library.setAvailableThemes,
       setAvailableTags: state.library.setAvailableTags,
       libraryLoading: state.library.isLoading,
+      // currentAllCardSets: state.library.allCardSets, // Not strictly needed if useEffect doesn't compare before set
+      // currentAvailableThemes: state.library.availableThemes,
+      // currentAvailableTags: state.library.availableTags,
   }));
 
    const isLoading = isDbLoading || libraryLoading;
 
    useEffect(() => {
      if (!isDbLoading) {
+       // Store setters now have internal guards
        setAllCardSets(dbAllCardSets ?? []);
        setAvailableThemes(dbAvailableThemes ?? []);
        setAvailableTags(dbAvailableTags ?? []);
      }
-   // Zustand setters are stable. The store setters now prevent updates if data is identical.
-   }, [isDbLoading, dbAllCardSets, dbAvailableThemes, dbAvailableTags]);
+   // Dependencies:
+   // - isDbLoading: Triggers effect when loading state changes.
+   // - dbAllCardSets, dbAvailableThemes, dbAvailableTags: Data from IndexedDB. Effect runs if these change.
+   // - Setters (setAllCardSets, etc.): Stable functions from Zustand, included for exhaustiveness/linting.
+   }, [isDbLoading, dbAllCardSets, dbAvailableThemes, dbAvailableTags, setAllCardSets, setAvailableThemes, setAvailableTags]);
 
 
   return (
