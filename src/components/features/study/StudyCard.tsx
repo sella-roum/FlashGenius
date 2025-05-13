@@ -3,11 +3,11 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import type { Flashcard } from '@/types';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useStore } from '@/lib/store';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
-import { Lightbulb, Info, RefreshCw } from 'lucide-react';
+import { Lightbulb, Info } from 'lucide-react'; // RefreshCw removed as regeneration handled by same button
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 
@@ -25,7 +25,7 @@ export function StudyCard({ card }: StudyCardProps) {
     currentDetails,
     isDetailsLoading,
     fetchDetails,
-    error, // Get error state from store
+    error,
   } = useStore((state) => ({
     isFrontVisible: state.study.isFrontVisible,
     flipCard: state.study.flipCard,
@@ -35,8 +35,16 @@ export function StudyCard({ card }: StudyCardProps) {
     currentDetails: state.study.currentDetails,
     isDetailsLoading: state.study.isDetailsLoading,
     fetchDetails: state.study.fetchDetails,
-    error: state.study.error, // Get study-specific errors
+    error: state.study.error,
   }));
+
+  const handleFetchHint = () => {
+    fetchHint(!!currentHint); // Pass true to forceRegenerate if hint already exists
+  };
+
+  const handleFetchDetails = () => {
+    fetchDetails(!!currentDetails); // Pass true to forceRegenerate if details already exist
+  };
 
   return (
     <Card className="w-full min-h-[300px] flex flex-col shadow-lg">
@@ -49,60 +57,59 @@ export function StudyCard({ card }: StudyCardProps) {
 
       {/* Card Footer with Actions */}
       <CardFooter className="flex flex-col items-stretch gap-4 p-4 border-t">
-          {/* Hint and Details Section (only visible when back is shown) */}
-          {!isFrontVisible && (
-               <div className="w-full space-y-3">
-                   {/* Hint */}
-                   <div>
-                       <Button variant="outline" size="sm" onClick={fetchHint} disabled={isHintLoading || !!currentHint} className="w-full justify-start">
-                           {isHintLoading ? (
-                               <LoadingSpinner size={16} className="mr-2" />
-                           ) : (
-                               <Lightbulb className="mr-2 h-4 w-4" />
-                           )}
-                           {currentHint ? 'ヒント:' : 'ヒントを表示'}
-                       </Button>
-                       {currentHint && (
-                           <p className="mt-2 text-sm text-muted-foreground bg-muted p-2 rounded-md">{currentHint}</p>
-                       )}
-                   </div>
+          {/* Hint and Details Section */}
+          <div className="w-full space-y-3">
+            {isFrontVisible && (
+              <div>
+                <Button variant="outline" size="sm" onClick={handleFetchHint} disabled={isHintLoading} className="w-full justify-start">
+                  {isHintLoading ? (
+                      <LoadingSpinner size={16} className="mr-2" />
+                  ) : (
+                      <Lightbulb className="mr-2 h-4 w-4" />
+                  )}
+                  {currentHint && !isHintLoading ? 'ヒントを再生成' : 'ヒントを表示'}
+                </Button>
+                {currentHint && (
+                    <p className="mt-2 text-sm text-muted-foreground bg-muted p-2 rounded-md">{currentHint}</p>
+                )}
+              </div>
+            )}
 
-                    {/* Details */}
-                   <div>
-                       <Button variant="outline" size="sm" onClick={fetchDetails} disabled={isDetailsLoading || !!currentDetails} className="w-full justify-start">
-                            {isDetailsLoading ? (
-                               <LoadingSpinner size={16} className="mr-2" />
-                           ) : (
-                               <Info className="mr-2 h-4 w-4" />
-                           )}
-                           {currentDetails ? '詳細:' : '詳細を表示'}
-                       </Button>
-                        {currentDetails && (
-                             <ScrollArea className="mt-2 h-[150px] w-full rounded-md border p-3 bg-muted"> {/* Scrollable details */}
-                                <ReactMarkdown
-                                     className="prose prose-sm dark:prose-invert max-w-none"
-                                     components={{ // Add styling for markdown elements if needed
-                                        // Example: Customize links
-                                        // a: ({node, ...props}) => <a className="text-primary hover:underline" {...props} />,
-                                    }}
-                                >
-                                   {currentDetails}
-                                </ReactMarkdown>
-                             </ScrollArea>
-                        )}
-                   </div>
-                   {error && ( // Display fetch errors for hint/details
-                        <p className="text-xs text-destructive text-center">{error}</p>
-                    )}
+            {!isFrontVisible && (
+              <div>
+                <Button variant="outline" size="sm" onClick={handleFetchDetails} disabled={isDetailsLoading} className="w-full justify-start">
+                  {isDetailsLoading ? (
+                      <LoadingSpinner size={16} className="mr-2" />
+                  ) : (
+                      <Info className="mr-2 h-4 w-4" />
+                  )}
+                  {currentDetails && !isDetailsLoading ? '詳細を再生成' : '詳細を表示'}
+                </Button>
+                {currentDetails && (
+                    <ScrollArea className="mt-2 h-[150px] w-full rounded-md border p-3 bg-muted">
+                      <ReactMarkdown
+                          className="prose prose-sm dark:prose-invert max-w-none"
+                          components={{
+                              // a: ({node, ...props}) => <a className="text-primary hover:underline" {...props} />,
+                          }}
+                      >
+                        {currentDetails}
+                      </ReactMarkdown>
+                    </ScrollArea>
+                )}
+              </div>
+            )}
 
-                   <Separator/>
-               </div>
-          )}
-
+            {error && (
+              <p className="text-xs text-destructive text-center">{error}</p>
+            )}
+            <Separator/>
+          </div>
 
           {/* Flip Button */}
-           <Button onClick={flipCard} className="w-full" variant={isFrontVisible ? "secondary" : "default"}>
-             <RefreshCw className="mr-2 h-4 w-4" />
+           <Button onClick={flipCard} className="w-full" variant={"default"}> {/* Always default variant */}
+             {/* Using a generic flip icon or text might be better than RefreshCw if it implies data refresh */}
+             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2 h-4 w-4 lucide lucide-file-diff"><path d="M14 2v6h6"/><path d="M10 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8.5L14 2Z"/><path d="M8 18v-2c0-1.1.9-2 2-2h4"/><path d="M12 12h4"/></svg>
              {isFrontVisible ? '答えを見る' : '問題を見る'}
            </Button>
       </CardFooter>
