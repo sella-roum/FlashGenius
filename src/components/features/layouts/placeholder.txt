@@ -1,0 +1,1 @@
+This directory can be used for page-specific layout components if needed later.
