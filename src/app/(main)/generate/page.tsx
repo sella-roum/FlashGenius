@@ -1,13 +1,13 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useContext } from 'react'; // Added useContext
 import { PageTitle } from '@/components/shared/PageTitle';
 import { InputArea } from '@/components/features/flashcard-generator/InputArea';
 import { GenerationOptions } from '@/components/features/flashcard-generator/GenerationOptions';
 import { PreviewAndSave } from '@/components/features/flashcard-generator/PreviewAndSave';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useStore } from '@/lib/store';
+import { useStore, StoreContext } from '@/lib/store'; // Added StoreContext
 import { useIndexedDB } from '@/lib/hooks/useIndexedDB';
 import { useToast } from '@/hooks/use-toast';
 import type { CardSet } from '@/types';
@@ -18,10 +18,12 @@ import { Terminal } from 'lucide-react';
 export default function GeneratePage() {
   const { toast } = useToast();
   const { addCardSet } = useIndexedDB();
+  const storeApi = useContext(StoreContext); // Get the store API instance
+
   const {
     generateState, // Renamed to avoid conflict with generate action
     isLoading,
-    error,
+    error, // This error variable is reactive and updates the UI
     previewCards,
     cardSetName,
     cardSetTheme,
@@ -42,10 +44,16 @@ export default function GeneratePage() {
 
   const handleGeneratePreview = async () => {
     await generatePreview();
-    // Access the error state directly from the useStore hook after generatePreview has completed
-    // The `error` variable will be updated by Zustand upon state change
-    if (useStore.getState().generate.error) {
-        toast({ variant: "destructive", title: "生成失敗", description: useStore.getState().generate.error });
+    // Access the latest error state directly from the store API for immediate toast
+    if (storeApi) {
+      const currentError = storeApi.getState().generate.error;
+      if (currentError) {
+          toast({ variant: "destructive", title: "生成失敗", description: currentError });
+      }
+    } else {
+      console.error("Zustand store API not found in context");
+      // Fallback if storeApi is null, though unlikely.
+      // The reactive `error` state will still update the UI Alert.
     }
   };
 
@@ -89,7 +97,7 @@ export default function GeneratePage() {
     <div>
       <PageTitle title="新しいカードセットを生成" subtitle="テキスト、URL、またはファイルからフラッシュカードを作成します。" />
 
-       {error && (
+       {error && ( // This uses the reactive `error` from useStore for UI display
          <Alert variant="destructive" className="mb-4">
            <Terminal className="h-4 w-4" />
            <AlertTitle>生成エラー</AlertTitle>
