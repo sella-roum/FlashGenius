@@ -11,8 +11,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Info } from 'lucide-react';
 
 export default function LibraryPage() {
-  const { allCardSets, availableThemes, availableTags, isLoading: isDbLoading } = useIndexedDB();
-  // Destructure setters and filtered sets directly
+  const { allCardSets: dbAllCardSets, availableThemes: dbAvailableThemes, availableTags: dbAvailableTags, isLoading: isDbLoading } = useIndexedDB();
   const {
       filteredCardSets,
       setAllCardSets,
@@ -27,18 +26,16 @@ export default function LibraryPage() {
       libraryLoading: state.library.isLoading,
   }));
 
-   // Check if the initial data load from IndexedDB is complete
    const isLoading = isDbLoading || libraryLoading;
 
-
-   // Effect to load data from IndexedDB hook into Zustand store
    useEffect(() => {
-     if (!isDbLoading) { // only update from DB when DB loading is false
-       setAllCardSets(allCardSets ?? []);
-       setAvailableThemes(availableThemes ?? []);
-       setAvailableTags(availableTags ?? []);
+     if (!isDbLoading) {
+       setAllCardSets(dbAllCardSets ?? []);
+       setAvailableThemes(dbAvailableThemes ?? []);
+       setAvailableTags(dbAvailableTags ?? []);
      }
-   }, [isDbLoading, allCardSets, availableThemes, availableTags, setAllCardSets, setAvailableThemes, setAvailableTags]);
+   // Zustand setters are stable. The store setters now prevent updates if data is identical.
+   }, [isDbLoading, dbAllCardSets, dbAvailableThemes, dbAvailableTags]);
 
 
   return (

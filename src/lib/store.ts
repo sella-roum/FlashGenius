@@ -1,4 +1,3 @@
-
 import { createContext, useContext } from 'react';
 import { createStore, useStore as useZustandStore, type StoreApi } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
@@ -40,38 +39,37 @@ interface GenerateActions {
   addPreviewCard: (card?: Flashcard) => void;
   deletePreviewCard: (index: number) => void;
   resetGenerator: () => void;
-  // Note: saveToLibrary is handled via useIndexedDB hook in the component
 }
 
 // --- Library Store ---
 interface LibraryState {
-  allCardSets: CardSet[]; // Populated from IndexedDB via hook
+  allCardSets: CardSet[];
   filteredCardSets: CardSet[];
   filterTheme: string | null;
   filterTags: string[];
-  availableThemes: string[]; // Populated from IndexedDB via hook
-  availableTags: string[]; // Populated from IndexedDB via hook
+  availableThemes: string[];
+  availableTags: string[];
   isLoading: boolean;
   error: string | null;
+  _applyFiltersAndUpdateDraft: (draftState: LibraryState) => void; // Internal helper
 }
 
 interface LibraryActions {
-  setAllCardSets: (sets: CardSet[]) => void; // Method to update from hook
+  setAllCardSets: (sets: CardSet[]) => void;
   setAvailableThemes: (themes: string[]) => void;
   setAvailableTags: (tags: string[]) => void;
   setFilterTheme: (theme: string | null) => void;
   addFilterTag: (tag: string) => void;
   removeFilterTag: (tag: string) => void;
-  applyFilters: () => void; // Re-calculates filteredCardSets
+  applyFilters: () => void;
   resetFilters: () => void;
-  // deleteCardSet handled via useIndexedDB hook
 }
 
 // --- Study Store ---
 interface StudyState {
   activeCardSetIds: string[];
-  originalDeck: Flashcard[]; // Keep original order/state if needed
-  currentDeck: Flashcard[]; // Shuffled/modified deck for study
+  originalDeck: Flashcard[];
+  currentDeck: Flashcard[];
   currentCardIndex: number;
   currentCard: Flashcard | null;
   isFrontVisible: boolean;
@@ -86,7 +84,7 @@ interface StudyActions {
   startStudySession: (cardSets: CardSet[]) => void;
   flipCard: () => void;
   nextCard: () => void;
-  previousCard: () => void; // Optional: Add previous card functionality
+  previousCard: () => void;
   fetchHint: () => Promise<void>;
   fetchDetails: () => Promise<void>;
   clearHintAndDetails: () => void;
@@ -105,7 +103,7 @@ export type Store = {
 const initialGenerateState: GenerateState = {
   inputType: null,
   inputValue: null,
-  generationOptions: { cardType: 'term-definition', language: 'Japanese' }, // Default language to Japanese
+  generationOptions: { cardType: 'term-definition', language: '日本語' },
   previewCards: [],
   isLoading: false,
   error: null,
@@ -114,7 +112,7 @@ const initialGenerateState: GenerateState = {
   cardSetTags: [],
 };
 
-const initialLibraryState: LibraryState = {
+const initialLibraryStateWithoutHelpers: Omit<LibraryState, '_applyFiltersAndUpdateDraft'> = {
   allCardSets: [],
   filteredCardSets: [],
   filterTheme: null,
@@ -139,13 +137,40 @@ const initialStudyState: StudyState = {
   error: null,
 };
 
-// Helper function for simple array comparison
-const arraysAreEqual = (arr1: any[], arr2: any[]): boolean => {
+// Helper function for simple array comparison (assumes primitive values or requires sorting for objects)
+const arraysAreEqual = (arr1: string[], arr2: string[]): boolean => {
+  if (arr1 === arr2) return true;
   if (arr1.length !== arr2.length) return false;
   const sortedArr1 = [...arr1].sort();
   const sortedArr2 = [...arr2].sort();
   return sortedArr1.every((value, index) => value === sortedArr2[index]);
 };
+
+// Helper function for deep comparison of CardSet arrays
+const cardSetsAreEqual = (arr1: CardSet[], arr2: CardSet[]): boolean => {
+  if (arr1 === arr2) return true;
+  if (arr1.length !== arr2.length) return false;
+
+  const sortedArr1 = [...arr1].sort((a, b) => a.id.localeCompare(b.id));
+  const sortedArr2 = [...arr2].sort((a, b) => a.id.localeCompare(b.id));
+
+  for (let i = 0; i < sortedArr1.length; i++) {
+    const set1 = sortedArr1[i];
+    const set2 = sortedArr2[i];
+    if (
+      set1.id !== set2.id ||
+      (set1.updatedAt?.getTime() ?? 0) !== (set2.updatedAt?.getTime() ?? 0) ||
+      set1.name !== set2.name ||
+      set1.theme !== set2.theme ||
+      set1.cards.length !== set2.cards.length ||
+      !arraysAreEqual(set1.tags, set2.tags) // Assumes tags are already sorted or arraysAreEqual handles sorting
+    ) {
+      return false;
+    }
+  }
+  return true;
+};
+
 
 // Create Store Implementation
 const createFlashGeniusStore = (
@@ -153,14 +178,18 @@ const createFlashGeniusStore = (
 ) => {
   const DEFAULT_PROPS: Store = {
     generate: { ...initialGenerateState } as GenerateState & GenerateActions,
-    library: { ...initialLibraryState } as LibraryState & LibraryActions,
+    library: { 
+        ...initialLibraryStateWithoutHelpers,
+        // Placeholder for _applyFiltersAndUpdateDraft, will be defined properly in the store creation
+        _applyFiltersAndUpdateDraft: () => {}, 
+    } as LibraryState & LibraryActions,
     study: { ...initialStudyState } as StudyState & StudyActions,
   };
 
   return createStore<Store>()(
     immer((set, get) => ({
       ...DEFAULT_PROPS,
-      ...(initProps ?? {}), 
+      ...(initProps ?? {}),
 
       // --- Generate Store Implementation ---
       generate: {
@@ -183,7 +212,7 @@ const createFlashGeniusStore = (
             state.generate.cardSetTags = state.generate.cardSetTags.filter(t => t !== tag);
         }),
         generatePreview: async () => {
-          const { inputType, inputValue, generationOptions } = get().generate;
+          const { inputType, inputValue } = get().generate;
           if (!inputType || !inputValue) {
             set((state) => { state.generate.error = '入力タイプと入力値は必須です。'; });
             return;
@@ -199,8 +228,8 @@ const createFlashGeniusStore = (
             let apiInput: GenerateFlashcardsInput;
 
             if (inputType === 'file' && inputValue instanceof File) {
-              const fileContent = await inputValue.text(); 
-              apiInput = { inputType: 'text', inputValue: fileContent }; 
+              const fileContent = await inputValue.text();
+              apiInput = { inputType: 'text', inputValue: fileContent };
             } else if (inputType === 'url' && typeof inputValue === 'string') {
               apiInput = { inputType: 'url', inputValue: inputValue };
             } else if (inputType === 'text' && typeof inputValue === 'string') {
@@ -212,7 +241,7 @@ const createFlashGeniusStore = (
             const response = await fetch(API_ENDPOINTS.GENERATE_CARDS, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(apiInput), 
+              body: JSON.stringify(apiInput),
             });
 
             if (!response.ok) {
@@ -222,7 +251,6 @@ const createFlashGeniusStore = (
 
             const result: GenerateFlashcardsOutput = await response.json();
             const cardsWithIds = result.cards.map(card => ({...card, id: crypto.randomUUID()}));
-
 
             set((state) => {
               state.generate.previewCards = cardsWithIds;
@@ -250,80 +278,100 @@ const createFlashGeniusStore = (
         }),
         resetGenerator: () => set((state) => {
              Object.assign(state.generate, initialGenerateState);
-             state.generate.cardSetTags = []; 
+             state.generate.cardSetTags = [];
              state.generate.previewCards = [];
          }),
-
       },
 
       // --- Library Store Implementation ---
       library: {
-        ...initialLibraryState,
+        ...initialLibraryStateWithoutHelpers,
         ...(initProps?.library),
+
+        _applyFiltersAndUpdateDraft: (draftState: LibraryState) => {
+            let sets = draftState.allCardSets;
+            if (draftState.filterTheme) {
+                sets = sets.filter(set => set.theme === draftState.filterTheme);
+            }
+            if (draftState.filterTags.length > 0) {
+                 const tagSet = new Set(draftState.filterTags);
+                 sets = sets.filter(set => set.tags.some(tag => tagSet.has(tag)));
+            }
+            if (!cardSetsAreEqual(draftState.filteredCardSets, sets)) {
+                draftState.filteredCardSets = sets;
+            }
+        },
+
         setAllCardSets: (newAllCardSets) => {
+          const currentAllCardSets = get().library.allCardSets;
+          if (cardSetsAreEqual(currentAllCardSets, newAllCardSets)) {
+            return; // Data is identical, no update needed to prevent loop
+          }
           set((state) => {
               state.library.allCardSets = newAllCardSets;
-              // Call applyFilters directly within the same 'set' call to ensure it uses the updated 'allCardSets'
-              let sets = newAllCardSets; // Use newAllCardSets for filtering
-              if (state.library.filterTheme) {
-                  sets = sets.filter(set => set.theme === state.library.filterTheme);
-              }
-              if (state.library.filterTags.length > 0) {
-                   const tagSet = new Set(state.library.filterTags);
-                   sets = sets.filter(set => set.tags.some(tag => tagSet.has(tag)));
-              }
-              state.library.filteredCardSets = sets;
+              state.library._applyFiltersAndUpdateDraft(state.library);
           });
         },
         setAvailableThemes: (newThemes) => {
-             const currentState = get().library;
-             if (arraysAreEqual(currentState.availableThemes, newThemes)) {
+             const currentThemes = get().library.availableThemes;
+             const sortedNewThemes = [...newThemes].sort();
+             if (arraysAreEqual(currentThemes, sortedNewThemes)) { // Assumes currentThemes is sorted
                  return;
              }
-             set((state) => { state.library.availableThemes = newThemes; });
+             set((state) => { state.library.availableThemes = sortedNewThemes; });
         },
         setAvailableTags: (newTags) => {
-            const currentState = get().library;
-            if (arraysAreEqual(currentState.availableTags, newTags)) {
+            const currentTags = get().library.availableTags;
+            const sortedNewTags = [...newTags].sort();
+            if (arraysAreEqual(currentTags, sortedNewTags)) { // Assumes currentTags is sorted
                  return;
             }
-            set((state) => { state.library.availableTags = newTags; });
+            set((state) => { state.library.availableTags = sortedNewTags; });
         },
         setFilterTheme: (theme) => {
-          set((state) => { state.library.filterTheme = theme; });
-          get().library.applyFilters();
+          set((state) => {
+            if (state.library.filterTheme === theme) return;
+            state.library.filterTheme = theme;
+            state.library._applyFiltersAndUpdateDraft(state.library);
+          });
         },
         addFilterTag: (tag) => {
           set((state) => {
             if (!state.library.filterTags.includes(tag)) {
               state.library.filterTags.push(tag);
+              state.library._applyFiltersAndUpdateDraft(state.library);
             }
           });
-          get().library.applyFilters();
         },
         removeFilterTag: (tag) => {
           set((state) => {
-             state.library.filterTags = state.library.filterTags.filter(t => t !== tag);
+            const initialLength = state.library.filterTags.length;
+            state.library.filterTags = state.library.filterTags.filter(t => t !== tag);
+            if (state.library.filterTags.length !== initialLength) {
+                state.library._applyFiltersAndUpdateDraft(state.library);
+            }
           });
-          get().library.applyFilters();
         },
-        applyFilters: () => set((state) => {
-            let sets = state.library.allCardSets;
-            if (state.library.filterTheme) {
-                sets = sets.filter(set => set.theme === state.library.filterTheme);
-            }
-            if (state.library.filterTags.length > 0) {
-                 const tagSet = new Set(state.library.filterTags);
-                 sets = sets.filter(set => set.tags.some(tag => tagSet.has(tag)));
-            }
-            state.library.filteredCardSets = sets;
-        }),
+        applyFilters: () => {
+             set(state => {
+                state.library._applyFiltersAndUpdateDraft(state.library);
+             });
+        },
         resetFilters: () => {
           set((state) => {
-            state.library.filterTheme = null;
-            state.library.filterTags = [];
+            let changed = false;
+            if (state.library.filterTheme !== null) {
+                state.library.filterTheme = null;
+                changed = true;
+            }
+            if (state.library.filterTags.length > 0) {
+                state.library.filterTags = [];
+                changed = true;
+            }
+            if (changed) {
+                state.library._applyFiltersAndUpdateDraft(state.library);
+            }
           });
-          get().library.applyFilters();
         },
       },
 
@@ -333,7 +381,7 @@ const createFlashGeniusStore = (
         ...(initProps?.study),
         startStudySession: (cardSets) => set((state) => {
            const allCards = cardSets.flatMap(set => set.cards);
-           const shuffledCards = [...allCards].sort(() => Math.random() - 0.5); 
+           const shuffledCards = [...allCards].sort(() => Math.random() - 0.5);
 
            Object.assign(state.study, initialStudyState);
 
@@ -342,7 +390,7 @@ const createFlashGeniusStore = (
            state.study.currentDeck = shuffledCards;
            state.study.currentCardIndex = shuffledCards.length > 0 ? 0 : -1;
            state.study.currentCard = shuffledCards.length > 0 ? shuffledCards[0] : null;
-           state.study.isFrontVisible = true; 
+           state.study.isFrontVisible = true;
         }),
         flipCard: () => set((state) => {
              if (state.study.currentCard) {
@@ -366,7 +414,7 @@ const createFlashGeniusStore = (
                 state.study.isHintLoading = false;
                 state.study.isDetailsLoading = false;
             } else {
-                state.study.currentCardIndex = -1; 
+                state.study.currentCardIndex = -1;
                 state.study.currentCard = null;
             }
         }),
@@ -384,7 +432,7 @@ const createFlashGeniusStore = (
         }),
         fetchHint: async () => {
            const currentCard = get().study.currentCard;
-           if (!currentCard || get().study.isHintLoading || get().study.currentHint) return; 
+           if (!currentCard || get().study.isHintLoading || get().study.currentHint) return;
 
            set(state => { state.study.isHintLoading = true; state.study.error = null; });
 
@@ -411,7 +459,7 @@ const createFlashGeniusStore = (
         },
         fetchDetails: async () => {
            const currentCard = get().study.currentCard;
-           if (!currentCard || get().study.isDetailsLoading || get().study.currentDetails) return; 
+           if (!currentCard || get().study.isDetailsLoading || get().study.currentDetails) return;
 
             set(state => { state.study.isDetailsLoading = true; state.study.error = null; });
 
@@ -441,7 +489,7 @@ const createFlashGeniusStore = (
             state.study.currentDetails = null;
             state.study.isHintLoading = false;
             state.study.isDetailsLoading = false;
-            state.study.error = null; 
+            state.study.error = null;
          }),
          shuffleDeck: () => set((state) => {
              state.study.currentDeck = [...state.study.originalDeck].sort(() => Math.random() - 0.5);
@@ -456,7 +504,7 @@ const createFlashGeniusStore = (
         }),
         resetStudySession: () => set((state) => {
               Object.assign(state.study, initialStudyState);
-              state.study.activeCardSetIds = []; 
+              state.study.activeCardSetIds = [];
               state.study.originalDeck = [];
               state.study.currentDeck = [];
          }),

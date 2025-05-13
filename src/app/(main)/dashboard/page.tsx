@@ -10,24 +10,26 @@ import { useStore } from '@/lib/store';
 import { Skeleton } from '@/components/ui/skeleton'; // For loading state
 
 export default function DashboardPage() {
-  const { allCardSets, availableThemes, availableTags, isLoading: isDbLoading } = useIndexedDB();
-  // Destructure setters directly
-  const { setAllCardSets, setAvailableThemes, setAvailableTags, libraryLoading } = useStore((state) => ({
+  const { allCardSets: dbAllCardSets, availableThemes: dbAvailableThemes, availableTags: dbAvailableTags, isLoading: isDbLoading } = useIndexedDB();
+  const { setAllCardSets, setAvailableThemes, setAvailableTags, libraryLoading, currentAllCardSets } = useStore((state) => ({
       setAllCardSets: state.library.setAllCardSets,
       setAvailableThemes: state.library.setAvailableThemes,
       setAvailableTags: state.library.setAvailableTags,
       libraryLoading: state.library.isLoading,
+      currentAllCardSets: state.library.allCardSets, // Get current store value for comparison if needed
   }));
 
   const isLoading = isDbLoading || libraryLoading;
 
   useEffect(() => {
-      if (!isDbLoading) { // only update from DB when DB loading is false
-          setAllCardSets(allCardSets ?? []);
-          setAvailableThemes(availableThemes ?? []);
-          setAvailableTags(availableTags ?? []);
+      if (!isDbLoading) {
+          setAllCardSets(dbAllCardSets ?? []);
+          setAvailableThemes(dbAvailableThemes ?? []);
+          setAvailableTags(dbAvailableTags ?? []);
       }
-  }, [isDbLoading, allCardSets, availableThemes, availableTags, setAllCardSets, setAvailableThemes, setAvailableTags]);
+  // Zustand setters (setAllCardSets, etc.) are stable and don't need to be in the dependency array.
+  // The store itself now has guards to prevent unnecessary updates if data is identical.
+  }, [isDbLoading, dbAllCardSets, dbAvailableThemes, dbAvailableTags]);
 
   return (
     <div>
@@ -47,7 +49,7 @@ export default function DashboardPage() {
                     <Skeleton className="h-16 w-full" />
                 </div>
              ) : (
-                <StudySuggestions cardSets={allCardSets} />
+                <StudySuggestions cardSets={currentAllCardSets} /> // Use card sets from store
              )}
          </section>
 
@@ -60,7 +62,7 @@ export default function DashboardPage() {
                      <Skeleton className="h-16 w-full" />
                  </div>
                ) : (
-                 <RecentActivity cardSets={allCardSets} />
+                 <RecentActivity cardSets={currentAllCardSets} /> // Use card sets from store
                )}
          </section>
 
