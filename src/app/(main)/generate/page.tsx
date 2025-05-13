@@ -19,7 +19,7 @@ export default function GeneratePage() {
   const { toast } = useToast();
   const { addCardSet } = useIndexedDB();
   const {
-    generate,
+    generateState, // Renamed to avoid conflict with generate action
     isLoading,
     error,
     previewCards,
@@ -29,7 +29,7 @@ export default function GeneratePage() {
     resetGenerator,
     generatePreview,
   } = useStore((state) => ({
-    generate: state.generate,
+    generateState: state.generate, // The whole generate slice
     isLoading: state.generate.isLoading,
     error: state.generate.error,
     previewCards: state.generate.previewCards,
@@ -42,9 +42,10 @@ export default function GeneratePage() {
 
   const handleGeneratePreview = async () => {
     await generatePreview();
-    // Toast message for success/error handled within the store or here
-    if (get().generate.error) { // Access error from store after generation
-        toast({ variant: "destructive", title: "生成失敗", description: get().generate.error });
+    // Access the error state directly from the useStore hook after generatePreview has completed
+    // The `error` variable will be updated by Zustand upon state change
+    if (useStore.getState().generate.error) {
+        toast({ variant: "destructive", title: "生成失敗", description: useStore.getState().generate.error });
     }
   };
 
@@ -66,12 +67,11 @@ export default function GeneratePage() {
         cards: previewCards,
         createdAt: new Date(),
         updatedAt: new Date(),
-        sourceType: generate.inputType ?? undefined,
-        // Avoid saving large file objects or full text in sourceValue, use filename or snippet
-        sourceValue: typeof generate.inputValue === 'string'
-                     ? generate.inputValue.substring(0, 100) // Snippet for text/url
-                     : generate.inputValue instanceof File
-                     ? generate.inputValue.name // Filename for file
+        sourceType: generateState.inputType ?? undefined,
+        sourceValue: typeof generateState.inputValue === 'string'
+                     ? generateState.inputValue.substring(0, 100) // Snippet for text/url
+                     : generateState.inputValue instanceof File
+                     ? generateState.inputValue.name // Filename for file
                      : undefined,
     };
 
@@ -116,7 +116,7 @@ export default function GeneratePage() {
                  <GenerationOptions />
               </CardContent>
            </Card>
-             <Button onClick={handleGeneratePreview} disabled={isLoading || !generate.inputType || !generate.inputValue} className="w-full">
+             <Button onClick={handleGeneratePreview} disabled={isLoading || !generateState.inputType || !generateState.inputValue} className="w-full">
                {isLoading ? <LoadingSpinner size={16} className="mr-2"/> : null}
                {isLoading ? '生成中...' : '3. プレビューを生成'}
              </Button>
