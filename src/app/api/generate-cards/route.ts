@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { generateFlashcards, type GenerateFlashcardsInput } from '@/ai/flows/generate-flashcards';
+import type { GenerationOptions } from '@/types'; // Import GenerationOptions type
 
 export async function POST(request: NextRequest) {
   try {
@@ -11,12 +12,16 @@ export async function POST(request: NextRequest) {
     if (!body || typeof body !== 'object' || !body.inputType || !body.inputValue) {
         return NextResponse.json({ error: 'inputTypeまたはinputValueがありません' }, { status: 400 });
     }
+    if (body.generationOptions && typeof body.generationOptions !== 'object') {
+         return NextResponse.json({ error: 'generationOptionsが無効です' }, { status: 400 });
+    }
+
 
     const input: GenerateFlashcardsInput = {
       inputType: body.inputType,
       inputValue: body.inputValue,
-      // Include generationOptions if passed from the client
-       // generationOptions: body.generationOptions || { cardType: 'term-definition', language: 'English' } // Example default
+      // Include generationOptions if passed from the client, otherwise use default or let the flow handle it
+       generationOptions: body.generationOptions as GenerationOptions || undefined
     };
 
     // Input validation using Zod could be added here before calling the flow

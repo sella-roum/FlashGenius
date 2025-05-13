@@ -30,5 +30,6 @@ export interface CardSet {
 export interface GenerationOptions {
   cardType: 'term-definition' | 'qa' | 'image-description'; // Example types
   language: string; // e.g., '日本語', '英語'
+  additionalPrompt?: string; // User-provided additional instructions
   // Add other Gemini instruction options here
 }

@@ -10,6 +10,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Textarea } from '@/components/ui/textarea'; // Import Textarea
 import { useStore } from '@/lib/store';
 import type { GenerationOptions as GenOptionsType } from '@/types';
 
@@ -25,6 +26,10 @@ export function GenerationOptions() {
    ) => {
      setOptions({ [key]: value });
    };
+
+    const handleAdditionalPromptChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+        handleOptionChange('additionalPrompt', e.target.value);
+    };
 
   return (
     <div className="space-y-4">
@@ -71,6 +76,20 @@ export function GenerationOptions() {
           </SelectContent>
         </Select>
       </div>
+
+      {/* Additional Prompt Input */}
+       <div>
+          <Label htmlFor="additionalPrompt">追加の指示 (任意)</Label>
+          <Textarea
+            id="additionalPrompt"
+            placeholder="例：「各カードの裏面には例文を含めてください。」「専門用語は避けてください。」"
+            value={options.additionalPrompt || ''}
+            onChange={handleAdditionalPromptChange}
+            rows={3}
+            className="resize-none"
+          />
+          <p className="text-xs text-muted-foreground mt-1">AIがカードを生成する方法をさらに指示します。</p>
+       </div>
 
       {/* Add more options here (e.g., desired number of cards, difficulty) */}
       {/* Example:

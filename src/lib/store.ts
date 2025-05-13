@@ -61,7 +61,6 @@ interface LibraryActions {
   setFilterTheme: (theme: string | null) => void;
   addFilterTag: (tag: string) => void;
   removeFilterTag: (tag: string) => void;
-  // applyFilters: () => void; // Removed as it's now internal logic
   resetFilters: () => void;
 }
 
@@ -103,7 +102,7 @@ export type Store = {
 const initialGenerateState: GenerateState = {
   inputType: null,
   inputValue: null,
-  generationOptions: { cardType: 'term-definition', language: '日本語' },
+  generationOptions: { cardType: 'term-definition', language: '日本語', additionalPrompt: '' },
   previewCards: [],
   isLoading: false,
   error: null,
@@ -153,6 +152,19 @@ const cardSetsAreEqual = (arr1?: CardSet[], arr2?: CardSet[]): boolean => {
   if (!arr1 || !arr2) return false; // One is null/undefined, the other isn't
   if (arr1.length !== arr2.length) return false;
 
+  // Simple comparison first based on length and updatedAt of the first element if available
+  // This avoids expensive sorting and iteration if the arrays are likely different
+  if (arr1.length > 0 && arr2.length > 0) {
+      const firstSet1 = arr1[0];
+      const firstSet2 = arr2[0];
+      if ((firstSet1.updatedAt?.getTime() ?? 0) !== (firstSet2.updatedAt?.getTime() ?? 0) && arr1.length === 1 && arr2.length === 1) {
+          // If only one element and updatedAt differs, likely different
+          // This is a heuristic, might need refinement
+      }
+  }
+
+
+  // If simple checks pass or arrays are empty, proceed with sorting and deep comparison
   const sortedArr1 = [...arr1].sort((a, b) => a.id.localeCompare(b.id));
   const sortedArr2 = [...arr2].sort((a, b) => a.id.localeCompare(b.id));
 
@@ -177,14 +189,14 @@ const cardSetsAreEqual = (arr1?: CardSet[], arr2?: CardSet[]): boolean => {
 
 
 // Create Store Implementation
-const createFlashGeniusStore = (
+export const initializeStore = (
   initProps?: Partial<Store>
 ) => {
   const DEFAULT_PROPS: Store = {
     generate: { ...initialGenerateState } as GenerateState & GenerateActions,
     library: {
         ...initialLibraryStateWithoutHelpers,
-        _applyFiltersAndUpdateDraft: () => {},
+        _applyFiltersAndUpdateDraft: () => {}, // Placeholder, will be implemented below
     } as LibraryState & LibraryActions,
     study: { ...initialStudyState } as StudyState & StudyActions,
   };
@@ -215,7 +227,7 @@ const createFlashGeniusStore = (
             state.generate.cardSetTags = state.generate.cardSetTags.filter(t => t !== tag);
         }),
         generatePreview: async () => {
-          const { inputType, inputValue } = get().generate;
+          const { inputType, inputValue, generationOptions } = get().generate; // Include options
           if (!inputType || !inputValue) {
             set((state) => { state.generate.error = '入力タイプと入力値は必須です。'; });
             return;
@@ -228,18 +240,29 @@ const createFlashGeniusStore = (
           });
 
           try {
-            let apiInput: GenerateFlashcardsInput;
+            let baseInput: Omit<GenerateFlashcardsInput, 'generationOptions'>; // Base type without options
 
             if (inputType === 'file' && inputValue instanceof File) {
               const fileContent = await inputValue.text(); // Consider very large files
-              apiInput = { inputType: 'text', inputValue: fileContent };
+              baseInput = { inputType: 'text', inputValue: fileContent };
             } else if (inputType === 'url' && typeof inputValue === 'string') {
-              apiInput = { inputType: 'url', inputValue: `${JINA_READER_URL_PREFIX}${inputValue}` };
+              baseInput = { inputType: 'url', inputValue: `${JINA_READER_URL_PREFIX}${inputValue}` };
             } else if (inputType === 'text' && typeof inputValue === 'string') {
-              apiInput = { inputType: 'text', inputValue: inputValue };
+              baseInput = { inputType: 'text', inputValue: inputValue };
             } else {
               throw new Error('無効な入力タイプまたは値です。');
             }
+
+            // Combine baseInput with generationOptions for the final API payload
+            const apiInput: GenerateFlashcardsInput = {
+                ...baseInput,
+                generationOptions: { // Pass the options object
+                    cardType: generationOptions.cardType,
+                    language: generationOptions.language,
+                    additionalPrompt: generationOptions.additionalPrompt || undefined, // Pass additional prompt if exists
+                }
+            };
+
 
             const response = await fetch(API_ENDPOINTS.GENERATE_CARDS, {
               method: 'POST',
@@ -280,9 +303,12 @@ const createFlashGeniusStore = (
             state.generate.previewCards.splice(index, 1);
         }),
         resetGenerator: () => set((state) => {
+             // Reset generate slice to initial state
              Object.assign(state.generate, initialGenerateState);
-             state.generate.cardSetTags = []; // Ensure these are reset too
-             state.generate.previewCards = [];
+             // Ensure arrays/objects inside are also reset if initial state has defaults
+             state.generate.cardSetTags = [...initialGenerateState.cardSetTags];
+             state.generate.previewCards = [...initialGenerateState.previewCards];
+             state.generate.generationOptions = {...initialGenerateState.generationOptions};
          }),
       },
 
@@ -300,6 +326,7 @@ const createFlashGeniusStore = (
                  const tagSet = new Set(draftState.filterTags);
                  sets = sets.filter(set => set.tags.some(tag => tagSet.has(tag)));
             }
+            // Only update if the filtered list is actually different
             if (!cardSetsAreEqual(draftState.filteredCardSets, sets)) {
                 draftState.filteredCardSets = sets;
             }
@@ -307,32 +334,40 @@ const createFlashGeniusStore = (
 
         setAllCardSets: (newAllCardSets) => {
           const currentAll = get().library.allCardSets;
+          // Optimization: Check if the new data is identical to the current data
           if (cardSetsAreEqual(currentAll, newAllCardSets)) {
-            set(state => { state.library.isLoading = false; }); // Ensure loading is false if sets are same
-            return;
+              set(state => { state.library.isLoading = false; }); // Still ensure loading is off
+              return; // Prevent unnecessary state update and re-render
           }
+          // If data is different, update the state
           set((state) => {
               state.library.allCardSets = newAllCardSets;
+              // Apply filters using the updated state within the same immer draft
               state.library._applyFiltersAndUpdateDraft(state.library);
-              state.library.isLoading = false;
+              state.library.isLoading = false; // Mark loading as complete
           });
         },
         setAvailableThemes: (newThemes) => {
              const currentThemes = get().library.availableThemes;
+             // Optimization: Check if the new themes are identical
              if (arraysAreEqual(currentThemes, newThemes)) {
                  return;
              }
+             // Sort before setting to ensure consistent order for comparison
              set((state) => { state.library.availableThemes = [...newThemes].sort(); });
         },
         setAvailableTags: (newTags) => {
             const currentTags = get().library.availableTags;
+             // Optimization: Check if the new tags are identical
             if (arraysAreEqual(currentTags, newTags)) {
                  return;
             }
+             // Sort before setting
             set((state) => { state.library.availableTags = [...newTags].sort(); });
         },
         setFilterTheme: (theme) => {
           set((state) => {
+            // Optimization: Check if the theme actually changed
             if (state.library.filterTheme === theme) return;
             state.library.filterTheme = theme;
             state.library._applyFiltersAndUpdateDraft(state.library);
@@ -340,9 +375,10 @@ const createFlashGeniusStore = (
         },
         addFilterTag: (tag) => {
           set((state) => {
+            // Optimization: Check if the tag is already present
             if (!state.library.filterTags.includes(tag)) {
               state.library.filterTags.push(tag);
-              state.library.filterTags.sort(); // Keep sorted for easier comparison
+              state.library.filterTags.sort(); // Maintain sorted order
               state.library._applyFiltersAndUpdateDraft(state.library);
             }
           });
@@ -351,8 +387,9 @@ const createFlashGeniusStore = (
           set((state) => {
             const initialLength = state.library.filterTags.length;
             state.library.filterTags = state.library.filterTags.filter(t => t !== tag);
-            // No need to re-sort, filtering preserves order relative to itself
+            // Optimization: Check if a tag was actually removed
             if (state.library.filterTags.length !== initialLength) {
+                // No need to re-sort, filtering preserves relative order
                 state.library._applyFiltersAndUpdateDraft(state.library);
             }
           });
@@ -368,6 +405,7 @@ const createFlashGeniusStore = (
                 state.library.filterTags = [];
                 changed = true;
             }
+            // Optimization: Only apply filters if something changed
             if (changed) {
                 state.library._applyFiltersAndUpdateDraft(state.library);
             }
@@ -383,24 +421,32 @@ const createFlashGeniusStore = (
            const allCards = cardSets.flatMap(set => set.cards);
            const shuffledCards = [...allCards].sort(() => Math.random() - 0.5);
 
-           Object.assign(state.study, initialStudyState); // Reset study state
+           // Reset study state to initial values cleanly
+           Object.assign(state.study, initialStudyState);
 
            state.study.activeCardSetIds = cardSets.map(set => set.id);
-           state.study.originalDeck = allCards;
+           state.study.originalDeck = allCards; // Keep original for reshuffle/restart
            state.study.currentDeck = shuffledCards;
            state.study.currentCardIndex = shuffledCards.length > 0 ? 0 : -1;
            state.study.currentCard = shuffledCards.length > 0 ? shuffledCards[0] : null;
-           state.study.isFrontVisible = true;
+           state.study.isFrontVisible = true; // Always start with the front
+           // Ensure hint/details/error states are cleared from previous session
+           state.study.currentHint = null;
+           state.study.currentDetails = null;
+           state.study.isHintLoading = false;
+           state.study.isDetailsLoading = false;
+           state.study.error = null;
         }),
         flipCard: () => set((state) => {
              if (state.study.currentCard) {
                 state.study.isFrontVisible = !state.study.isFrontVisible;
-                if (state.study.isFrontVisible) { // When flipping back to front
+                // Clear hint/details when flipping back to front
+                if (state.study.isFrontVisible) {
                     state.study.currentHint = null;
                     state.study.currentDetails = null;
                     state.study.isHintLoading = false;
                     state.study.isDetailsLoading = false;
-                    state.study.error = null;
+                    state.study.error = null; // Clear any errors from hint/detail fetch
                 }
             }
          }),
@@ -409,6 +455,7 @@ const createFlashGeniusStore = (
              if (nextIndex < state.study.currentDeck.length) {
                 state.study.currentCardIndex = nextIndex;
                 state.study.currentCard = state.study.currentDeck[nextIndex];
+                // Reset state for the new card
                 state.study.isFrontVisible = true;
                 state.study.currentHint = null;
                 state.study.currentDetails = null;
@@ -416,10 +463,16 @@ const createFlashGeniusStore = (
                 state.study.isDetailsLoading = false;
                 state.study.error = null;
             } else {
-                // End of deck
+                // Reached the end of the deck
                 state.study.currentCardIndex = -1; // Indicate completion
                 state.study.currentCard = null;
-                 // Optionally keep other states or reset them
+                // Clear other states as the session is over
+                state.study.isFrontVisible = true;
+                state.study.currentHint = null;
+                state.study.currentDetails = null;
+                state.study.isHintLoading = false;
+                state.study.isDetailsLoading = false;
+                state.study.error = null;
             }
         }),
         previousCard: () => set((state) => {
@@ -427,6 +480,7 @@ const createFlashGeniusStore = (
             if (prevIndex >= 0) {
                 state.study.currentCardIndex = prevIndex;
                 state.study.currentCard = state.study.currentDeck[prevIndex];
+                 // Reset state for the previous card
                 state.study.isFrontVisible = true;
                 state.study.currentHint = null;
                 state.study.currentDetails = null;
@@ -437,12 +491,14 @@ const createFlashGeniusStore = (
         }),
         fetchHint: async () => {
            const currentCard = get().study.currentCard;
+           // Prevent fetching if already loading, already have a hint, or no card
            if (!currentCard || get().study.isHintLoading || get().study.currentHint) return;
 
            set(state => { state.study.isHintLoading = true; state.study.error = null; });
 
            try {
                const input: RequestAiGeneratedHintInput = { front: currentCard.front, back: currentCard.back };
+                // Use the direct API call (route handler)
                 const response = await fetch(API_ENDPOINTS.GENERATE_HINT, {
                    method: 'POST',
                    headers: { 'Content-Type': 'application/json' },
@@ -452,7 +508,7 @@ const createFlashGeniusStore = (
                     const errorData = await response.json();
                     throw new Error(errorData.error || `APIエラー: ${response.statusText}`);
                 }
-                const result = await response.json();
+                const result = await response.json(); // Should match RequestAiGeneratedHintOutput
 
                set(state => { state.study.currentHint = result.hint; });
            } catch (error: any) {
@@ -464,22 +520,24 @@ const createFlashGeniusStore = (
         },
         fetchDetails: async () => {
            const currentCard = get().study.currentCard;
+           // Prevent fetching if already loading, already have details, or no card
            if (!currentCard || get().study.isDetailsLoading || get().study.currentDetails) return;
 
             set(state => { state.study.isDetailsLoading = true; state.study.error = null; });
 
            try {
                const input: ProvideDetailedExplanationInput = { front: currentCard.front, back: currentCard.back };
-                const response = await fetch(API_ENDPOINTS.GENERATE_DETAILS, {
+                 // Use the direct API call (route handler)
+                 const response = await fetch(API_ENDPOINTS.GENERATE_DETAILS, {
                    method: 'POST',
                    headers: { 'Content-Type': 'application/json' },
                    body: JSON.stringify(input),
-                });
+                 });
                  if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error || `APIエラー: ${response.statusText}`);
-                }
-                const result = await response.json();
+                     const errorData = await response.json();
+                     throw new Error(errorData.error || `APIエラー: ${response.statusText}`);
+                 }
+                 const result = await response.json(); // Should match ProvideDetailedExplanationOutput
 
                set(state => { state.study.currentDetails = result.details; });
            } catch (error: any) {
@@ -489,27 +547,30 @@ const createFlashGeniusStore = (
                set(state => { state.study.isDetailsLoading = false; });
            }
         },
-        clearHintAndDetails: () => set((state) => { // Typically called when card changes or visibility changes
+        clearHintAndDetails: () => set((state) => {
             state.study.currentHint = null;
             state.study.currentDetails = null;
-            state.study.isHintLoading = false;
+            state.study.isHintLoading = false; // Ensure flags are reset
             state.study.isDetailsLoading = false;
-            state.study.error = null;
+            state.study.error = null; // Clear errors too
          }),
          shuffleDeck: () => set((state) => {
              state.study.currentDeck = [...state.study.originalDeck].sort(() => Math.random() - 0.5);
              state.study.currentCardIndex = state.study.currentDeck.length > 0 ? 0 : -1;
              state.study.currentCard = state.study.currentDeck.length > 0 ? state.study.currentDeck[0] : null;
+              // Reset state for the new card order
              state.study.isFrontVisible = true;
-             state.study.currentHint = null; // Reset hint/details on shuffle
+             state.study.currentHint = null;
              state.study.currentDetails = null;
              state.study.isHintLoading = false;
              state.study.isDetailsLoading = false;
              state.study.error = null;
         }),
         resetStudySession: () => set((state) => {
+              // Reset study slice to initial state cleanly
               Object.assign(state.study, initialStudyState);
-              state.study.activeCardSetIds = []; // Ensure arrays are new
+              // Ensure arrays are distinct objects from the initial state definition
+              state.study.activeCardSetIds = [];
               state.study.originalDeck = [];
               state.study.currentDeck = [];
          }),
@@ -520,6 +581,8 @@ const createFlashGeniusStore = (
 };
 
 // Context for providing the store
+// We need to initialize the context with a default value,
+// which should ideally match the structure of the store API but can be null initially.
 export const StoreContext = createContext<StoreApi<Store> | null>(null);
 
 // Hook for using the store
@@ -533,6 +596,5 @@ export const useStore = <T>(selector: (store: Store) => T): T => {
   return useZustandStore(storeContext, selector);
 };
 
-// Initialize store function (used in provider)
-export const initializeStore = (preloadedState: Partial<Store> = {}) =>
-  createFlashGeniusStore(preloadedState);
+// Store API instance type for direct access if needed (used in generate page)
+export type AppStoreApi = StoreApi<Store>;
