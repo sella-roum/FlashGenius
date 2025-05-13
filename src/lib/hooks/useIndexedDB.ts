@@ -1,6 +1,8 @@
+
 'use client';
 
 import { useLiveQuery } from 'dexie-react-hooks';
+import { useCallback } from 'react'; // Import useCallback
 import { db } from '@/lib/db';
 import type { CardSet, Tag } from '@/types';
 
@@ -16,18 +18,18 @@ export function useIndexedDB() {
 
    const availableTags = useLiveQuery(async () => {
       const uniqueTagArrays = await db.cardSets.orderBy('tags').uniqueKeys();
-      const allTags = (uniqueTagArrays as string[][]).flat();
-      return Array.from(new Set(allTags)).filter(tag => tag !== '');
+      const allTagsFlat = (uniqueTagArrays as string[][]).flat();
+      // Filter out empty strings and null/undefined before creating Set for uniqueness
+      const validTags = allTagsFlat.filter(tag => typeof tag === 'string' && tag.trim() !== '');
+      return Array.from(new Set(validTags));
    }, []);
 
 
   // CRUD Operations (async functions, not hooks directly, but used by components/stores)
-  const addCardSet = async (cardSet: CardSet): Promise<string> => {
-    // Ensure dates are set
+  const addCardSet = useCallback(async (cardSet: CardSet): Promise<string> => {
     const now = new Date();
     cardSet.createdAt = cardSet.createdAt || now;
     cardSet.updatedAt = now;
-    // Ensure unique tags are added to the tags table
     for (const tagName of cardSet.tags) {
         const existingTag = await db.tags.where('name').equals(tagName).first();
         if (!existingTag) {
@@ -35,14 +37,13 @@ export function useIndexedDB() {
         }
     }
     return db.cardSets.add(cardSet);
-  };
+  }, []);
 
-  const getCardSetById = async (id: string): Promise<CardSet | undefined> => {
+  const getCardSetById = useCallback(async (id: string): Promise<CardSet | undefined> => {
     return db.cardSets.get(id);
-  };
+  }, []);
 
-  const updateCardSet = async (id: string, changes: Partial<CardSet>): Promise<number> => {
-     // Ensure unique tags are added if tags are updated
+  const updateCardSet = useCallback(async (id: string, changes: Partial<CardSet>): Promise<number> => {
      if (changes.tags) {
          for (const tagName of changes.tags) {
              const existingTag = await db.tags.where('name').equals(tagName).first();
@@ -52,57 +53,53 @@ export function useIndexedDB() {
          }
      }
     return db.cardSets.update(id, { ...changes, updatedAt: new Date() });
-  };
+  }, []);
 
-  const deleteCardSet = async (id: string): Promise<void> => {
+  const deleteCardSet = useCallback(async (id: string): Promise<void> => {
     return db.cardSets.delete(id);
-  };
+  }, []);
 
-  const addTag = async (tag: Omit<Tag, 'id'>): Promise<string> => {
+  const addTag = useCallback(async (tag: Omit<Tag, 'id'>): Promise<string> => {
     const existingTag = await db.tags.where('name').equals(tag.name).first();
     if (existingTag) {
       return existingTag.id;
     }
     const newId = crypto.randomUUID();
     return db.tags.add({ ...tag, id: newId });
-  };
+  }, []);
 
- const getCardSets = async (filter?: { theme?: string | null; tags?: string[] }): Promise<CardSet[]> => {
+ const getCardSets = useCallback(async (filter?: { theme?: string | null; tags?: string[] }): Promise<CardSet[]> => {
     if (!filter || (!filter.theme && (!filter.tags || filter.tags.length === 0))) {
       return db.cardSets.toArray();
     }
 
-    let collection = db.cardSets.toCollection(); // Start with all sets
+    let collection = db.cardSets.toCollection();
 
     if (filter.theme) {
       collection = collection.filter(set => set.theme === filter.theme);
     }
 
     if (filter.tags && filter.tags.length > 0) {
-      // This requires iterating after potential theme filtering,
-      // or a more complex query if Dexie supports it directly on the filtered collection.
-      // Using filter for simplicity here.
       const tagSet = new Set(filter.tags);
       collection = collection.filter(set => set.tags.some(tag => tagSet.has(tag)));
     }
 
     return collection.toArray();
-  };
+  }, []);
 
 
   return {
-    // Live Query Results
     allCardSets: allCardSets ?? [],
     allTags: allTags ?? [],
     availableThemes: availableThemes ?? [],
     availableTags: availableTags ?? [],
-
-    // Async CRUD Functions
     addCardSet,
     getCardSetById,
     updateCardSet,
     deleteCardSet,
     addTag,
-    getCardSets, // Expose the filtering function
+    getCardSets,
   };
 }
+
+    
