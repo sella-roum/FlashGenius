@@ -7,7 +7,7 @@ import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useStore } from '@/lib/store';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
-import { Lightbulb, Info } from 'lucide-react'; // RefreshCw removed as regeneration handled by same button
+import { Lightbulb, Info } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 
@@ -108,9 +108,8 @@ export function StudyCard({ card }: StudyCardProps) {
 
           {/* Flip Button */}
            <Button onClick={flipCard} className="w-full" variant={"default"}> {/* Always default variant */}
-             {/* Using a generic flip icon or text might be better than RefreshCw if it implies data refresh */}
              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2 h-4 w-4 lucide lucide-file-diff"><path d="M14 2v6h6"/><path d="M10 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8.5L14 2Z"/><path d="M8 18v-2c0-1.1.9-2 2-2h4"/><path d="M12 12h4"/></svg>
-             {isFrontVisible ? '答えを見る' : '問題を見る'}
+             {isFrontVisible ? '裏を見る' : '表を見る'}
            </Button>
       </CardFooter>
     </Card>
