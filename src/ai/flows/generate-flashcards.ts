@@ -9,7 +9,10 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
-import type { GenerationOptions as GenOptionsType } from '@/types'; // Import the type
+import type { GenerationOptions as GenOptionsType } from '@/types'; 
+import { JINA_READER_URL_PREFIX } from '@/lib/constants';
+
+const MAX_INPUT_CHAR_LENGTH_FOR_FLOW = 500000; // Character limit for content passed to LLM
 
 const GenerationOptionsSchema = z.object({
   cardType: z.enum(['term-definition', 'qa', 'image-description']).describe('The desired format for the flashcards (e.g., term/definition or question/answer).'),
@@ -18,8 +21,8 @@ const GenerationOptionsSchema = z.object({
 });
 
 const GenerateFlashcardsInputSchema = z.object({
-  inputType: z.enum(['file', 'url', 'text']).describe('The type of input provided by the user.'),
-  inputValue: z.string().describe('The input value (text content, URL content, or file content).'),
+  inputType: z.enum(['file', 'url', 'text']).describe('The type of input provided by the user (file content is sent as text).'),
+  inputValue: z.string().describe('The input value (text content, or URL).'),
   generationOptions: GenerationOptionsSchema.optional().describe('Options to customize the flashcard generation.'),
 });
 export type GenerateFlashcardsInput = z.infer<typeof GenerateFlashcardsInputSchema>;
@@ -35,7 +38,6 @@ const GenerateFlashcardsOutputSchema = z.object({
 export type GenerateFlashcardsOutput = z.infer<typeof GenerateFlashcardsOutputSchema>;
 
 export async function generateFlashcards(input: GenerateFlashcardsInput): Promise<GenerateFlashcardsOutput> {
-  // Provide default options if none are given
   const optionsWithDefaults: GenOptionsType = {
       cardType: input.generationOptions?.cardType || 'term-definition',
       language: input.generationOptions?.language || '日本語',
@@ -47,7 +49,7 @@ export async function generateFlashcards(input: GenerateFlashcardsInput): Promis
 
 const prompt = ai.definePrompt({
   name: 'generateFlashcardsPrompt',
-  input: {schema: GenerateFlashcardsInputSchema},
+  input: {schema: GenerateFlashcardsInputSchema}, // Uses the same schema, but inputValue might be processed
   output: {schema: GenerateFlashcardsOutputSchema},
   prompt: `あなたはフラッシュカード作成のエキスパートです。提供された情報源から、指定されたオプションに従って高品質なフラッシュカードを作成します。
 
@@ -72,15 +74,8 @@ const prompt = ai.definePrompt({
   `,
   config: {
     safetySettings: [
-      {
-        category: 'HARM_CATEGORY_HARASSMENT',
-        threshold: 'BLOCK_MEDIUM_AND_ABOVE',
-      },
-      {
-        category: 'HARM_CATEGORY_HATE_SPEECH',
-        threshold: 'BLOCK_MEDIUM_AND_ABOVE',
-      },
-       // Consider adding others if needed, e.g., DANGEROUS_CONTENT
+      { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+      { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
     ],
   },
 });
@@ -91,16 +86,58 @@ const generateFlashcardsFlow = ai.defineFlow(
     inputSchema: GenerateFlashcardsInputSchema,
     outputSchema: GenerateFlashcardsOutputSchema,
   },
-  async input => {
-    // Ensure default options are set if not provided in the input already (redundant check based on wrapper)
-     const optionsWithDefaults: GenOptionsType = {
-       cardType: input.generationOptions?.cardType || 'term-definition',
-       language: input.generationOptions?.language || '日本語',
-       additionalPrompt: input.generationOptions?.additionalPrompt || '',
-     };
-     const effectiveInput = { ...input, generationOptions: optionsWithDefaults };
+  async (flowInput) => {
+    let contentToProcess = flowInput.inputValue;
+    const originalInputTypeForPrompt = flowInput.inputType; // To inform LLM about original source type
 
-    const {output} = await prompt(effectiveInput);
+    if (flowInput.inputType === 'url') {
+      try {
+        // Client sends raw URL. Flow prefixes with Jina and fetches.
+        const fullUrlToFetch = flowInput.inputValue.startsWith('http') 
+          ? flowInput.inputValue // If client somehow sends a full Jina URL already
+          : `${JINA_READER_URL_PREFIX}${flowInput.inputValue}`;
+        
+        console.log(`Flow: URL「${fullUrlToFetch}」からコンテンツを取得しています`);
+        const response = await fetch(fullUrlToFetch);
+        if (!response.ok) {
+          throw new Error(`Jina AI からのURLコンテンツの取得に失敗しました: ${response.status} ${response.statusText}`);
+        }
+        let textContent = await response.text();
+        
+        if (textContent.length > MAX_INPUT_CHAR_LENGTH_FOR_FLOW) {
+          textContent = textContent.substring(0, MAX_INPUT_CHAR_LENGTH_FOR_FLOW);
+          console.warn(`Flow: URLからのコンテンツが長すぎたため、約${MAX_INPUT_CHAR_LENGTH_FOR_FLOW.toLocaleString()}文字に切り詰められました。`);
+        }
+        contentToProcess = textContent;
+      } catch (e: any) {
+        console.error("Flow: URLコンテンツの処理エラー:", e);
+        // Fallback: Pass an error message or the URL itself if fetching fails.
+        // The LLM might not handle raw URLs well if it expects text.
+        contentToProcess = `URLコンテンツの取得に失敗しました: ${flowInput.inputValue}. エラー: ${e.message}`;
+      }
+    } else if (flowInput.inputType === 'file' || flowInput.inputType === 'text') {
+      // For 'file', client has already read content and sent as text.
+      if (flowInput.inputValue.length > MAX_INPUT_CHAR_LENGTH_FOR_FLOW) {
+        contentToProcess = flowInput.inputValue.substring(0, MAX_INPUT_CHAR_LENGTH_FOR_FLOW);
+        console.warn(`Flow: ${flowInput.inputType} 入力が長すぎたため、約${MAX_INPUT_CHAR_LENGTH_FOR_FLOW.toLocaleString()}文字に切り詰められました。`);
+      }
+    }
+
+     const optionsWithDefaults: GenOptionsType = {
+       cardType: flowInput.generationOptions?.cardType || 'term-definition',
+       language: flowInput.generationOptions?.language || '日本語',
+       additionalPrompt: flowInput.generationOptions?.additionalPrompt || '',
+     };
+     
+     // Prepare input for the prompt: use original inputType for context, but processed content for inputValue
+     const effectiveInputForPrompt = { 
+        ...flowInput, 
+        inputType: originalInputTypeForPrompt, // For the `{{{inputType}}}` field in prompt
+        inputValue: contentToProcess,         // For the `{{{inputValue}}}` field (the actual content)
+        generationOptions: optionsWithDefaults 
+    };
+
+    const {output} = await prompt(effectiveInputForPrompt);
     return output!;
   }
 );

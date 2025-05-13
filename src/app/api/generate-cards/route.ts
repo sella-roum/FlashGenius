@@ -16,24 +16,20 @@ export async function POST(request: NextRequest) {
          return NextResponse.json({ error: 'generationOptionsが無効です' }, { status: 400 });
     }
 
-
-    const input: GenerateFlashcardsInput = {
-      inputType: body.inputType,
-      inputValue: body.inputValue,
-      // Include generationOptions if passed from the client, otherwise use default or let the flow handle it
-       generationOptions: body.generationOptions as GenerationOptions || undefined
+    // The client sends its inputType ('file', 'url', 'text') and inputValue.
+    // If inputType is 'file', inputValue is already the text content.
+    // If inputType is 'url', inputValue is the raw URL.
+    // The flow will handle Jina prefixing for URLs and fetching content.
+    const inputForFlow: GenerateFlashcardsInput = {
+      inputType: body.inputType as 'file' | 'url' | 'text',
+      inputValue: body.inputValue as string, // Client ensures string or File (which it converts to string for 'file' type to this API)
+      generationOptions: body.generationOptions as GenerationOptions || undefined
     };
 
-    // Input validation using Zod could be added here before calling the flow
-    // const validationResult = GenerateFlashcardsInputSchema.safeParse(input);
-    // if (!validationResult.success) {
-    //     return NextResponse.json({ error: 'Invalid input data', details: validationResult.error.errors }, { status: 400 });
-    // }
-
-    console.log("generateFlashcardsフローを呼び出し中、入力:", input); // Server-side log
+    console.log("generateFlashcardsフローを呼び出し中、入力:", inputForFlow); // Server-side log
 
     // Call the Genkit flow
-    const result = await generateFlashcards(input);
+    const result = await generateFlashcards(inputForFlow);
 
     console.log("generateFlashcardsフローの戻り値:", result); // Server-side log
 
@@ -45,8 +41,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.message || 'フラッシュカードの生成に失敗しました' }, { status: 500 });
   }
 }
-
-// Optional: Handle GET requests or other methods if needed
-// export async function GET() {
-//   return NextResponse.json({ message: 'Method Not Allowed' }, { status: 405 });
-// }

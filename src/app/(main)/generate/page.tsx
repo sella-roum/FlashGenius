@@ -1,29 +1,30 @@
 'use client';
 
-import React, { useState, useContext } from 'react'; // Added useContext
+import React, { useContext } from 'react';
 import { PageTitle } from '@/components/shared/PageTitle';
 import { InputArea } from '@/components/features/flashcard-generator/InputArea';
 import { GenerationOptions } from '@/components/features/flashcard-generator/GenerationOptions';
 import { PreviewAndSave } from '@/components/features/flashcard-generator/PreviewAndSave';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useStore, StoreContext } from '@/lib/store'; // Added StoreContext
+import { useStore, StoreContext } from '@/lib/store';
 import { useIndexedDB } from '@/lib/hooks/useIndexedDB';
 import { useToast } from '@/hooks/use-toast';
 import type { CardSet } from '@/types';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Terminal } from 'lucide-react';
+import { Terminal, Info } from 'lucide-react';
 
 export default function GeneratePage() {
   const { toast } = useToast();
   const { addCardSet } = useIndexedDB();
-  const storeApi = useContext(StoreContext); // Get the store API instance
+  const storeApi = useContext(StoreContext);
 
   const {
-    generateState, // Renamed to avoid conflict with generate action
+    generateState,
     isLoading,
-    error, // This error variable is reactive and updates the UI
+    error,
+    warningMessage, // Added warningMessage
     previewCards,
     cardSetName,
     cardSetTheme,
@@ -31,9 +32,10 @@ export default function GeneratePage() {
     resetGenerator,
     generatePreview,
   } = useStore((state) => ({
-    generateState: state.generate, // The whole generate slice
+    generateState: state.generate,
     isLoading: state.generate.isLoading,
     error: state.generate.error,
+    warningMessage: state.generate.warningMessage, // Get warningMessage from store
     previewCards: state.generate.previewCards,
     cardSetName: state.generate.cardSetName,
     cardSetTheme: state.generate.cardSetTheme,
@@ -44,16 +46,14 @@ export default function GeneratePage() {
 
   const handleGeneratePreview = async () => {
     await generatePreview();
-    // Access the latest error state directly from the store API for immediate toast
     if (storeApi) {
       const currentError = storeApi.getState().generate.error;
+      // Warning messages are handled by the Alert component below, no separate toast needed for warnings.
       if (currentError) {
           toast({ variant: "destructive", title: "生成失敗", description: currentError });
       }
     } else {
-      console.error("Zustand store API not found in context");
-      // Fallback if storeApi is null, though unlikely.
-      // The reactive `error` state will still update the UI Alert.
+      console.error("ZustandストアAPIがコンテキストに見つかりません");
     }
   };
 
@@ -70,23 +70,23 @@ export default function GeneratePage() {
     const newCardSet: CardSet = {
         id: crypto.randomUUID(),
         name: cardSetName,
-        theme: cardSetTheme || undefined, // Handle empty theme
+        theme: cardSetTheme || undefined,
         tags: cardSetTags,
         cards: previewCards,
         createdAt: new Date(),
         updatedAt: new Date(),
         sourceType: generateState.inputType ?? undefined,
         sourceValue: typeof generateState.inputValue === 'string'
-                     ? generateState.inputValue.substring(0, 100) // Snippet for text/url
+                     ? generateState.inputValue.substring(0, 100)
                      : generateState.inputValue instanceof File
-                     ? generateState.inputValue.name // Filename for file
+                     ? generateState.inputValue.name
                      : undefined,
     };
 
     try {
         await addCardSet(newCardSet);
         toast({ title: "成功！", description: `カードセット「${cardSetName}」をライブラリに保存しました。` });
-        resetGenerator(); // Clear the form after successful save
+        resetGenerator();
     } catch (err: any) {
         console.error("カードセットの保存に失敗しました:", err);
         toast({ variant: "destructive", title: "保存失敗", description: err.message || "カードセットをデータベースに保存できませんでした。" });
@@ -97,7 +97,15 @@ export default function GeneratePage() {
     <div>
       <PageTitle title="新しいカードセットを生成" subtitle="テキスト、URL、またはファイルからフラッシュカードを作成します。" />
 
-       {error && ( // This uses the reactive `error` from useStore for UI display
+       {warningMessage && !isLoading && (
+         <Alert variant="default" className="mb-4 bg-yellow-100 border-yellow-400 text-yellow-700 dark:bg-yellow-900/30 dark:border-yellow-600 dark:text-yellow-300">
+           <Info className="h-4 w-4 text-yellow-700 dark:text-yellow-300" /> {/* Adjusted icon color */}
+           <AlertTitle>注意</AlertTitle>
+           <AlertDescription>{warningMessage}</AlertDescription>
+         </Alert>
+       )}
+
+       {error && (
          <Alert variant="destructive" className="mb-4">
            <Terminal className="h-4 w-4" />
            <AlertTitle>生成エラー</AlertTitle>
@@ -106,7 +114,6 @@ export default function GeneratePage() {
        )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Input & Options Column */}
         <div className="lg:col-span-1 space-y-6">
            <Card>
              <CardHeader>
@@ -130,7 +137,6 @@ export default function GeneratePage() {
              </Button>
         </div>
 
-        {/* Preview & Save Column */}
         <div className="lg:col-span-2">
             <Card>
                  <CardHeader>
@@ -143,7 +149,6 @@ export default function GeneratePage() {
                      </Button>
                  </CardContent>
              </Card>
-
         </div>
       </div>
     </div>
