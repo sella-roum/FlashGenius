@@ -1,3 +1,4 @@
+// src/components/features/study/StudyCard.tsx
 'use client';
 
 import React from 'react';
@@ -7,7 +8,7 @@ import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useStore } from '@/lib/store';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
-import { Lightbulb, Info } from 'lucide-react';
+import { Lightbulb, Info, EyeOff } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 
@@ -22,9 +23,11 @@ export function StudyCard({ card }: StudyCardProps) {
     currentHint,
     isHintLoading,
     fetchHint,
+    hideHint, // New action
     currentDetails,
     isDetailsLoading,
     fetchDetails,
+    hideDetails, // New action
     error,
   } = useStore((state) => ({
     isFrontVisible: state.study.isFrontVisible,
@@ -32,9 +35,11 @@ export function StudyCard({ card }: StudyCardProps) {
     currentHint: state.study.currentHint,
     isHintLoading: state.study.isHintLoading,
     fetchHint: state.study.fetchHint,
+    hideHint: state.study.hideHint, // Get new action
     currentDetails: state.study.currentDetails,
     isDetailsLoading: state.study.isDetailsLoading,
     fetchDetails: state.study.fetchDetails,
+    hideDetails: state.study.hideDetails, // Get new action
     error: state.study.error,
   }));
 
@@ -70,7 +75,13 @@ export function StudyCard({ card }: StudyCardProps) {
                   {currentHint && !isHintLoading ? 'ヒントを再生成' : 'ヒントを表示'}
                 </Button>
                 {currentHint && (
-                    <p className="mt-2 text-sm text-muted-foreground bg-muted p-2 rounded-md">{currentHint}</p>
+                    <div className="mt-2 space-y-2">
+                        <p className="text-sm text-muted-foreground bg-muted p-2 rounded-md">{currentHint}</p>
+                        <Button variant="ghost" size="sm" onClick={hideHint} className="w-full justify-start text-xs">
+                           <EyeOff className="mr-2 h-3 w-3" />
+                           ヒントを隠す
+                        </Button>
+                    </div>
                 )}
               </div>
             )}
@@ -86,16 +97,22 @@ export function StudyCard({ card }: StudyCardProps) {
                   {currentDetails && !isDetailsLoading ? '詳細を再生成' : '詳細を表示'}
                 </Button>
                 {currentDetails && (
-                    <ScrollArea className="mt-2 h-[150px] w-full rounded-md border p-3 bg-muted">
-                      <ReactMarkdown
-                          className="prose prose-sm dark:prose-invert max-w-none"
-                          components={{
-                              // a: ({node, ...props}) => <a className="text-primary hover:underline" {...props} />,
-                          }}
-                      >
-                        {currentDetails}
-                      </ReactMarkdown>
-                    </ScrollArea>
+                    <div className="mt-2 space-y-2">
+                        <ScrollArea className="h-[150px] w-full rounded-md border p-3 bg-muted">
+                          <ReactMarkdown
+                              className="prose prose-sm dark:prose-invert max-w-none"
+                              components={{
+                                  // a: ({node, ...props}) => <a className="text-primary hover:underline" {...props} />,
+                              }}
+                          >
+                            {currentDetails}
+                          </ReactMarkdown>
+                        </ScrollArea>
+                         <Button variant="ghost" size="sm" onClick={hideDetails} className="w-full justify-start text-xs">
+                            <EyeOff className="mr-2 h-3 w-3" />
+                            詳細を隠す
+                         </Button>
+                    </div>
                 )}
               </div>
             )}

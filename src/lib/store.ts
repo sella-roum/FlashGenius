@@ -53,7 +53,6 @@ interface LibraryState {
   availableTags: string[];
   isLoading: boolean;
   error: string | null;
-  _applyFiltersAndUpdateDraft: (draftState: LibraryState) => void; // Internal helper
 }
 
 interface LibraryActions {
@@ -64,6 +63,7 @@ interface LibraryActions {
   addFilterTag: (tag: string) => void;
   removeFilterTag: (tag: string) => void;
   resetFilters: () => void;
+  // Removed applyFilters from public actions, it's an internal helper now.
 }
 
 // --- Study Store ---
@@ -87,7 +87,9 @@ interface StudyActions {
   nextCard: () => void;
   previousCard: () => void;
   fetchHint: (forceRegenerate?: boolean) => Promise<void>;
+  hideHint: () => void; // New action
   fetchDetails: (forceRegenerate?: boolean) => Promise<void>;
+  hideDetails: () => void; // New action
   shuffleDeck: () => void;
   resetStudySession: () => void;
 }
@@ -112,16 +114,17 @@ const initialGenerateState: GenerateState = {
   cardSetTags: [],
 };
 
-const initialLibraryStateWithoutHelpers: Omit<LibraryState, '_applyFiltersAndUpdateDraft'> = {
+const initialLibraryState: LibraryState = {
   allCardSets: [],
   filteredCardSets: [],
   filterTheme: null,
   filterTags: [],
   availableThemes: [],
   availableTags: [],
-  isLoading: true,
+  isLoading: true, // Start with loading true until DB data is fetched
   error: null,
 };
+
 
 const initialStudyState: StudyState = {
   activeCardSetIds: [],
@@ -139,25 +142,30 @@ const initialStudyState: StudyState = {
 
 
 // Helper function for simple array comparison (elements must be primitives, order matters if not sorted before call)
-const arraysAreEqualPrimitive = (arr1?: string[], arr2?: string[]): boolean => {
+const arraysAreEqualPrimitive = (arr1?: readonly string[], arr2?: readonly string[]): boolean => {
   if (arr1 === arr2) return true;
   if (!arr1 || !arr2 || arr1.length !== arr2.length) return false;
-  for (let i = 0; i < arr1.length; i++) {
-    if (arr1[i] !== arr2[i]) return false;
+  const sortedArr1 = [...arr1].sort();
+  const sortedArr2 = [...arr2].sort();
+  for (let i = 0; i < sortedArr1.length; i++) {
+    if (sortedArr1[i] !== sortedArr2[i]) return false;
   }
   return true;
 };
 
 // Helper function for comparing CardSet arrays (more robust)
-const cardSetsAreEqual = (sets1?: CardSet[], sets2?: CardSet[]): boolean => {
+const cardSetsAreEqual = (sets1?: readonly CardSet[], sets2?: readonly CardSet[]): boolean => {
     if (sets1 === sets2) return true;
     if (!sets1 || !sets2 || sets1.length !== sets2.length) return false;
 
     const normalizeSet = (set: CardSet) => ({
-        ...set,
+        id: set.id,
+        name: set.name,
+        theme: set.theme,
         tags: [...set.tags].sort(),
-        // Consider normalizing cards if their order or content can change subtly
-        // For now, assume updatedAt and card count are good proxies
+        updatedAt: set.updatedAt?.getTime() ?? 0,
+        cardCount: set.cards.length,
+        // For a very deep comparison, you'd iterate through cards too
     });
 
     const sortedSets1 = [...sets1].sort((a, b) => a.id.localeCompare(b.id)).map(normalizeSet);
@@ -170,15 +178,27 @@ const cardSetsAreEqual = (sets1?: CardSet[], sets2?: CardSet[]): boolean => {
             s1.id !== s2.id ||
             s1.name !== s2.name ||
             s1.theme !== s2.theme ||
-            (s1.updatedAt?.getTime() ?? 0) !== (s2.updatedAt?.getTime() ?? 0) ||
-            s1.cards.length !== s2.cards.length || // Basic card check
+            s1.updatedAt !== s2.updatedAt ||
+            s1.cardCount !== s2.cardCount || // Basic card check
             !arraysAreEqualPrimitive(s1.tags, s2.tags)
-            // Add deeper card content comparison here if necessary
         ) {
             return false;
         }
     }
     return true;
+};
+
+// Internal helper for library filtering logic
+const applyLibraryFilters = (allSets: readonly CardSet[], filterTheme: string | null, filterTags: readonly string[]): CardSet[] => {
+    let sets = [...allSets]; // Create a mutable copy
+    if (filterTheme) {
+        sets = sets.filter(set => set.theme === filterTheme);
+    }
+    if (filterTags.length > 0) {
+         const tagSet = new Set(filterTags);
+         sets = sets.filter(set => set.tags.some(tag => tagSet.has(tag)));
+    }
+    return sets;
 };
 
 
@@ -187,18 +207,15 @@ export const initializeStore = (
   initProps?: Partial<Store>
 ): StoreApi<Store> => {
   const DEFAULT_PROPS: Store = {
-    generate: { ...initialGenerateState } as GenerateState & GenerateActions, // Type assertion
-    library: {
-        ...initialLibraryStateWithoutHelpers,
-        _applyFiltersAndUpdateDraft: () => {}, // Will be implemented
-    } as LibraryState & LibraryActions, // Type assertion
-    study: { ...initialStudyState } as StudyState & StudyActions, // Type assertion
+    generate: { ...initialGenerateState } as GenerateState & GenerateActions,
+    library: { ...initialLibraryState } as LibraryState & LibraryActions,
+    study: { ...initialStudyState } as StudyState & StudyActions,
   };
 
   return createStore<Store>()(
     immer((set, get) => ({
       ...DEFAULT_PROPS,
-      ...(initProps ? {
+      ...(initProps ? { // Deep merge initial props
           generate: { ...DEFAULT_PROPS.generate, ...initProps.generate },
           library: { ...DEFAULT_PROPS.library, ...initProps.library },
           study: { ...DEFAULT_PROPS.study, ...initProps.study },
@@ -310,37 +327,23 @@ export const initializeStore = (
 
       // --- Library Store Implementation ---
       library: {
-        ...initialLibraryStateWithoutHelpers,
+        ...initialLibraryState,
         ...(initProps?.library),
-
-        _applyFiltersAndUpdateDraft: (draftState) => {
-            let sets = draftState.allCardSets;
-            if (draftState.filterTheme) {
-                sets = sets.filter(set => set.theme === draftState.filterTheme);
-            }
-            if (draftState.filterTags.length > 0) {
-                 const tagSet = new Set(draftState.filterTags);
-                 sets = sets.filter(set => set.tags.some(tag => tagSet.has(tag)));
-            }
-            if (!cardSetsAreEqual(draftState.filteredCardSets, sets)) {
-                draftState.filteredCardSets = sets;
-            }
-        },
 
         setAllCardSets: (newAllCardSets) => {
             set((state) => {
                 if (cardSetsAreEqual(state.library.allCardSets, newAllCardSets)) {
-                    if (state.library.isLoading) state.library.isLoading = false;
-                    return;
+                    if (state.library.isLoading) state.library.isLoading = false; // Still turn off loading if it was on
+                    return; // No actual data change
                 }
                 state.library.allCardSets = newAllCardSets;
-                get().library._applyFiltersAndUpdateDraft(state.library); // Call the method from the store instance
+                state.library.filteredCardSets = applyLibraryFilters(newAllCardSets, state.library.filterTheme, state.library.filterTags);
                 state.library.isLoading = false;
             });
         },
         setAvailableThemes: (newThemes) => {
              set((state) => {
-                const sortedNewThemes = [...newThemes].sort();
+                const sortedNewThemes = [...new Set(newThemes)].sort(); // Ensure unique and sorted
                 if (arraysAreEqualPrimitive(state.library.availableThemes, sortedNewThemes)) {
                     return;
                 }
@@ -349,7 +352,7 @@ export const initializeStore = (
         },
         setAvailableTags: (newTags) => {
             set((state) => {
-                const sortedNewTags = [...newTags].sort();
+                const sortedNewTags = [...new Set(newTags)].sort(); // Ensure unique and sorted
                 if (arraysAreEqualPrimitive(state.library.availableTags, sortedNewTags)) {
                     return;
                 }
@@ -360,24 +363,25 @@ export const initializeStore = (
             set((state) => {
                 if (state.library.filterTheme === theme) return;
                 state.library.filterTheme = theme;
-                get().library._applyFiltersAndUpdateDraft(state.library);
+                state.library.filteredCardSets = applyLibraryFilters(state.library.allCardSets, theme, state.library.filterTags);
             });
         },
         addFilterTag: (tag) => {
             set((state) => {
                 if (!state.library.filterTags.includes(tag)) {
-                    state.library.filterTags.push(tag);
-                    state.library.filterTags.sort();
-                    get().library._applyFiltersAndUpdateDraft(state.library);
+                    const newTags = [...state.library.filterTags, tag].sort();
+                    state.library.filterTags = newTags;
+                    state.library.filteredCardSets = applyLibraryFilters(state.library.allCardSets, state.library.filterTheme, newTags);
                 }
             });
         },
         removeFilterTag: (tag) => {
             set((state) => {
                 const initialLength = state.library.filterTags.length;
-                state.library.filterTags = state.library.filterTags.filter(t => t !== tag);
-                if (state.library.filterTags.length !== initialLength) {
-                    get().library._applyFiltersAndUpdateDraft(state.library);
+                const newTags = state.library.filterTags.filter(t => t !== tag);
+                if (newTags.length !== initialLength) {
+                    state.library.filterTags = newTags;
+                    state.library.filteredCardSets = applyLibraryFilters(state.library.allCardSets, state.library.filterTheme, newTags);
                 }
             });
         },
@@ -393,7 +397,7 @@ export const initializeStore = (
                     changed = true;
                 }
                 if (changed) {
-                    get().library._applyFiltersAndUpdateDraft(state.library);
+                    state.library.filteredCardSets = applyLibraryFilters(state.library.allCardSets, null, []);
                 }
             });
         },
@@ -414,8 +418,8 @@ export const initializeStore = (
            const newCurrentCard = shuffledCards.length > 0 ? shuffledCards[0] : null;
            state.study.currentCard = newCurrentCard;
            state.study.isFrontVisible = true;
-           state.study.currentHint = newCurrentCard?.hint || null;
-           state.study.currentDetails = newCurrentCard?.details || null;
+           state.study.currentHint = newCurrentCard?.hint || null; // Use cached hint if available
+           state.study.currentDetails = newCurrentCard?.details || null; // Use cached details if available
            state.study.isHintLoading = false;
            state.study.isDetailsLoading = false;
            state.study.error = null;
@@ -423,6 +427,12 @@ export const initializeStore = (
         flipCard: () => set((state) => {
              if (state.study.currentCard) {
                 state.study.isFrontVisible = !state.study.isFrontVisible;
+                 // Reset hint/details visibility when flipping to side that doesn't show them
+                if (state.study.isFrontVisible) {
+                  // state.study.currentDetails = null; // Don't clear, let user hide explicitly
+                } else {
+                  // state.study.currentHint = null; // Don't clear, let user hide explicitly
+                }
             }
          }),
         nextCard: () => set((state) => {
@@ -463,14 +473,13 @@ export const initializeStore = (
             }
         }),
         fetchHint: async (forceRegenerate = false) => {
-           const { currentCard: cardFromGet, isHintLoading: currentIsHintLoading } = get().study;
+           const { currentCard: cardFromGet, isHintLoading: currentIsHintLoading, currentHint: existingHint } = get().study;
 
            if (!cardFromGet || (currentIsHintLoading && !forceRegenerate)) return;
 
-           if (!forceRegenerate && cardFromGet.hint) {
+           if (!forceRegenerate && existingHint && cardFromGet.hint === existingHint) { // Use existingHint from state
              set(state => {
-               if (state.study.currentHint !== cardFromGet.hint) state.study.currentHint = cardFromGet.hint!;
-               state.study.isHintLoading = false;
+               state.study.isHintLoading = false; // Ensure loading is off
                state.study.error = null;
              });
              return;
@@ -479,9 +488,8 @@ export const initializeStore = (
            set(state => {
              state.study.isHintLoading = true;
              state.study.error = null;
-             if (forceRegenerate) {
+             if (forceRegenerate || !existingHint) { // If forcing or no hint in state, clear it
                state.study.currentHint = null;
-               // currentCard.hint will be updated on success
              }
            });
 
@@ -500,12 +508,14 @@ export const initializeStore = (
 
                set(state => {
                  state.study.currentHint = result.hint;
-                 if (state.study.currentCard) { // Check currentCard again as it might have changed by another action
-                   state.study.currentCard.hint = result.hint; // Cache on the card object
-                   const cardIndex = state.study.currentDeck.findIndex(c => c.id === state.study.currentCard!.id);
-                   if (cardIndex !== -1) {
-                     state.study.currentDeck[cardIndex].hint = result.hint; // Persist in deck
-                   }
+                 // Update the card in the currentDeck and originalDeck as well for persistence within session
+                 const cardId = state.study.currentCard?.id;
+                 if (cardId) {
+                    const deckIdx = state.study.currentDeck.findIndex(c => c.id === cardId);
+                    if (deckIdx > -1) state.study.currentDeck[deckIdx].hint = result.hint;
+                    const originalIdx = state.study.originalDeck.findIndex(c => c.id === cardId);
+                    if (originalIdx > -1) state.study.originalDeck[originalIdx].hint = result.hint;
+                    if (state.study.currentCard) state.study.currentCard.hint = result.hint; // Update the active card display
                  }
                });
            } catch (error: any) {
@@ -515,15 +525,17 @@ export const initializeStore = (
                set(state => { state.study.isHintLoading = false; });
            }
         },
+        hideHint: () => set((state) => {
+            state.study.currentHint = null;
+        }),
         fetchDetails: async (forceRegenerate = false) => {
-           const { currentCard: cardFromGet, isDetailsLoading: currentIsDetailsLoading } = get().study;
+           const { currentCard: cardFromGet, isDetailsLoading: currentIsDetailsLoading, currentDetails: existingDetails } = get().study;
 
            if (!cardFromGet || (currentIsDetailsLoading && !forceRegenerate)) return;
 
-           if (!forceRegenerate && cardFromGet.details) {
+           if (!forceRegenerate && existingDetails && cardFromGet.details === existingDetails) { // Use existingDetails from state
              set(state => {
-               if(state.study.currentDetails !== cardFromGet.details) state.study.currentDetails = cardFromGet.details!;
-               state.study.isDetailsLoading = false;
+               state.study.isDetailsLoading = false; // Ensure loading is off
                state.study.error = null;
              });
              return;
@@ -532,7 +544,7 @@ export const initializeStore = (
             set(state => {
               state.study.isDetailsLoading = true;
               state.study.error = null;
-              if (forceRegenerate) {
+              if (forceRegenerate || !existingDetails) { // If forcing or no details in state, clear it
                 state.study.currentDetails = null;
               }
             });
@@ -552,12 +564,14 @@ export const initializeStore = (
 
                set(state => {
                  state.study.currentDetails = result.details;
-                 if (state.study.currentCard) {
-                   state.study.currentCard.details = result.details; // Cache on card object
-                   const cardIndex = state.study.currentDeck.findIndex(c => c.id === state.study.currentCard!.id);
-                   if (cardIndex !== -1) {
-                     state.study.currentDeck[cardIndex].details = result.details; // Persist in deck
-                   }
+                 // Update the card in the currentDeck and originalDeck for persistence
+                 const cardId = state.study.currentCard?.id;
+                 if (cardId) {
+                    const deckIdx = state.study.currentDeck.findIndex(c => c.id === cardId);
+                    if (deckIdx > -1) state.study.currentDeck[deckIdx].details = result.details;
+                    const originalIdx = state.study.originalDeck.findIndex(c => c.id === cardId);
+                    if (originalIdx > -1) state.study.originalDeck[originalIdx].details = result.details;
+                    if (state.study.currentCard) state.study.currentCard.details = result.details; // Update active card display
                  }
                });
            } catch (error: any) {
@@ -567,6 +581,9 @@ export const initializeStore = (
                set(state => { state.study.isDetailsLoading = false; });
            }
         },
+        hideDetails: () => set((state) => {
+            state.study.currentDetails = null;
+        }),
          shuffleDeck: () => set((state) => {
              const newShuffledDeck = [...state.study.originalDeck].sort(() => Math.random() - 0.5);
              state.study.currentDeck = newShuffledDeck;
