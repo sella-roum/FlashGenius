@@ -53,23 +53,23 @@ export function FilterControls() {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between pb-4">
-        <CardTitle className="text-base font-medium">Filter By</CardTitle>
+        <CardTitle className="text-base font-medium">絞り込み</CardTitle>
          {hasActiveFilters && (
               <Button variant="ghost" size="sm" onClick={resetFilters} className="text-xs h-auto px-2 py-1">
-                  Reset Filters
+                  フィルターをリセット
               </Button>
          )}
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Theme Filter */}
         <div>
-          <Label htmlFor="themeFilter" className="mb-2 block text-sm font-medium">Theme / Subject</Label>
+          <Label htmlFor="themeFilter" className="mb-2 block text-sm font-medium">テーマ / 科目</Label>
           <Select value={filterTheme ?? "all-themes"} onValueChange={handleThemeChange}>
              <SelectTrigger id="themeFilter">
-                <SelectValue placeholder="Select theme" />
+                <SelectValue placeholder="テーマを選択" />
              </SelectTrigger>
              <SelectContent>
-                <SelectItem value="all-themes">All Themes</SelectItem>
+                <SelectItem value="all-themes">すべてのテーマ</SelectItem>
                 {availableThemes.map((theme) => (
                      <SelectItem key={theme} value={theme}>
                          {theme}
@@ -82,7 +82,7 @@ export function FilterControls() {
         {/* Tag Filter */}
         {availableTags.length > 0 && (
           <div>
-            <Label className="mb-2 block text-sm font-medium">Tags</Label>
+            <Label className="mb-2 block text-sm font-medium">タグ</Label>
             <ScrollArea className="h-40 rounded-md border p-3"> {/* Adjust height */}
               <div className="space-y-2">
                 {availableTags.sort().map((tag) => (

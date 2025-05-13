@@ -60,7 +60,7 @@ export function StudyCard({ card }: StudyCardProps) {
                            ) : (
                                <Lightbulb className="mr-2 h-4 w-4" />
                            )}
-                           {currentHint ? 'Hint:' : 'Show Hint'}
+                           {currentHint ? 'ヒント:' : 'ヒントを表示'}
                        </Button>
                        {currentHint && (
                            <p className="mt-2 text-sm text-muted-foreground bg-muted p-2 rounded-md">{currentHint}</p>
@@ -75,7 +75,7 @@ export function StudyCard({ card }: StudyCardProps) {
                            ) : (
                                <Info className="mr-2 h-4 w-4" />
                            )}
-                           {currentDetails ? 'Details:' : 'Show Details'}
+                           {currentDetails ? '詳細:' : '詳細を表示'}
                        </Button>
                         {currentDetails && (
                              <ScrollArea className="mt-2 h-[150px] w-full rounded-md border p-3 bg-muted"> {/* Scrollable details */}
@@ -103,7 +103,7 @@ export function StudyCard({ card }: StudyCardProps) {
           {/* Flip Button */}
            <Button onClick={flipCard} className="w-full" variant={isFrontVisible ? "secondary" : "default"}>
              <RefreshCw className="mr-2 h-4 w-4" />
-             {isFrontVisible ? 'Reveal Answer' : 'Show Question'}
+             {isFrontVisible ? '答えを見る' : '問題を見る'}
            </Button>
       </CardFooter>
     </Card>

@@ -30,14 +30,16 @@ export function InputArea() {
 
        if (rejectedFiles.length > 0) {
            const firstError = rejectedFiles[0].errors[0];
+           let errorMessage = 'ファイルのアップロードに失敗しました。';
            if (firstError.code === 'file-too-large') {
-               setFileError(`File is too large. Maximum size is ${MAX_FILE_SIZE_MB}MB.`);
+               errorMessage = `ファイルサイズが大きすぎます。最大サイズは${MAX_FILE_SIZE_MB}MBです。`;
            } else if (firstError.code === 'file-invalid-type') {
-                setFileError('Invalid file type. Please upload TXT, MD, PDF, JPG, PNG, or WEBP.');
+                errorMessage = '無効なファイルタイプです。TXT, MD, PDF, JPG, PNG, または WEBP をアップロードしてください。';
            } else {
-               setFileError(firstError.message || 'File upload failed.');
+               errorMessage = firstError.message || 'ファイルのアップロードに失敗しました。';
            }
-           toast({ variant: 'destructive', title: 'File Error', description: fileError || 'Could not accept the file.' });
+           setFileError(errorMessage);
+           toast({ variant: 'destructive', title: 'ファイルエラー', description: errorMessage });
            setInputValue(null); // Clear input value on error
            return;
        }
@@ -48,10 +50,10 @@ export function InputArea() {
         setInputType('file');
         setInputValue(file);
         setFileName(file.name);
-         toast({ title: 'File Accepted', description: `${file.name} ready for processing.` });
+         toast({ title: 'ファイル受理', description: `${file.name} の処理準備ができました。` });
       }
     },
-    [setInputType, setInputValue, toast, fileError] // Added fileError to dependencies
+    [setInputType, setInputValue, toast] // Removed fileError from dependencies as it causes loop. Error is set inside.
   );
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -88,9 +90,9 @@ export function InputArea() {
   return (
     <Tabs defaultValue="text" onValueChange={handleTabChange} value={inputType ?? 'text'}>
       <TabsList className="grid w-full grid-cols-3">
-        <TabsTrigger value="file"><UploadCloud className="mr-1 h-4 w-4"/>File</TabsTrigger>
+        <TabsTrigger value="file"><UploadCloud className="mr-1 h-4 w-4"/>ファイル</TabsTrigger>
         <TabsTrigger value="url"><LinkIcon className="mr-1 h-4 w-4"/>URL</TabsTrigger>
-        <TabsTrigger value="text"><Type className="mr-1 h-4 w-4"/>Text</TabsTrigger>
+        <TabsTrigger value="text"><Type className="mr-1 h-4 w-4"/>テキスト</TabsTrigger>
       </TabsList>
       <TabsContent value="file" className="mt-4">
         <div
@@ -105,26 +107,26 @@ export function InputArea() {
                 <>
                  <CheckCircle className="w-10 h-10 mb-3 text-green-500" />
                  <p className="mb-2 text-sm font-semibold">{fileName}</p>
-                 <p className="text-xs text-muted-foreground">Click or drag to replace file</p>
+                 <p className="text-xs text-muted-foreground">クリックまたはドラッグしてファイルを置き換え</p>
                  </>
              ) : fileError ? (
                   <>
                     <AlertCircle className="w-10 h-10 mb-3 text-destructive" />
                     <p className="mb-2 text-sm text-destructive">{fileError}</p>
-                    <p className="text-xs text-muted-foreground">Click or drag file to upload</p>
+                    <p className="text-xs text-muted-foreground">クリックまたはドラッグしてファイルをアップロード</p>
                    </>
              ) : isDragActive ? (
                   <>
                     <UploadCloud className="w-10 h-10 mb-3 text-primary" />
-                    <p className="mb-2 text-sm text-primary">Drop the file here...</p>
+                    <p className="mb-2 text-sm text-primary">ここにファイルをドロップ...</p>
                    </>
              ) : (
                   <>
                     <UploadCloud className="w-10 h-10 mb-3 text-muted-foreground" />
                     <p className="mb-2 text-sm text-muted-foreground">
-                      <span className="font-semibold">Click to upload</span> or drag and drop
+                      <span className="font-semibold">クリックしてアップロード</span> またはドラッグ＆ドロップ
                     </p>
-                    <p className="text-xs text-muted-foreground">TXT, MD, PDF, JPG, PNG, WEBP (MAX. {MAX_FILE_SIZE_MB}MB)</p>
+                    <p className="text-xs text-muted-foreground">TXT, MD, PDF, JPG, PNG, WEBP (最大 {MAX_FILE_SIZE_MB}MB)</p>
                   </>
              )}
 
@@ -132,7 +134,7 @@ export function InputArea() {
         </div>
       </TabsContent>
       <TabsContent value="url" className="mt-4 space-y-2">
-         <p className="text-sm text-muted-foreground">Enter a public URL (e.g., blog post, news article).</p>
+         <p className="text-sm text-muted-foreground">公開URL（例：ブログ記事、ニュース記事）を入力してください。</p>
         <Input
           type="url"
           placeholder="https://example.com/article"
@@ -141,9 +143,9 @@ export function InputArea() {
         />
       </TabsContent>
       <TabsContent value="text" className="mt-4 space-y-2">
-         <p className="text-sm text-muted-foreground">Paste your text content here.</p>
+         <p className="text-sm text-muted-foreground">ここにテキストコンテンツを貼り付けてください。</p>
         <Textarea
-          placeholder="Type or paste your notes, lecture transcript, etc."
+          placeholder="メモ、講義の書き起こしなどを入力または貼り付け"
           rows={8}
           value={typeof inputValue === 'string' && inputType === 'text' ? inputValue : ''}
           onChange={handleTextChange}

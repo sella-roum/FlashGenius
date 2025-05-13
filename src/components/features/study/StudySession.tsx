@@ -30,7 +30,7 @@ export function StudySession() {
 
   if (!currentCard) {
     // This case is handled in the page.tsx, but added as a safeguard
-    return <div className="text-center mt-10">Loading card or session ended...</div>;
+    return <div className="text-center mt-10">カードを読み込み中またはセッション終了...</div>;
   }
 
 
@@ -40,7 +40,7 @@ export function StudySession() {
        <div className="w-full max-w-2xl mb-4 px-4">
            <Progress value={progressValue} className="w-full h-2" />
            <p className="text-sm text-muted-foreground text-center mt-1">
-                Card {currentCardIndex + 1} of {deckSize}
+                カード {currentCardIndex + 1} / {deckSize}
             </p>
        </div>
 
@@ -55,17 +55,17 @@ export function StudySession() {
             variant="outline"
             onClick={previousCard}
             disabled={currentCardIndex <= 0}
-            aria-label="Previous Card"
+            aria-label="前のカード"
         >
            <ChevronLeft className="h-5 w-5" />
-           <span className="ml-2 hidden sm:inline">Previous</span>
+           <span className="ml-2 hidden sm:inline">前へ</span>
          </Button>
 
           <Button
              variant="outline"
              onClick={shuffleDeck}
-             aria-label="Shuffle Deck"
-             title="Shuffle Deck"
+             aria-label="デッキをシャッフル"
+             title="デッキをシャッフル"
          >
             <RotateCcw className="h-5 w-5"/>
          </Button>
@@ -74,9 +74,9 @@ export function StudySession() {
             variant="default" // Changed to default for primary action
             onClick={nextCard}
             disabled={currentCardIndex >= deckSize - 1}
-            aria-label="Next Card"
+            aria-label="次のカード"
         >
-          <span className="mr-2 hidden sm:inline">Next</span>
+          <span className="mr-2 hidden sm:inline">次へ</span>
           <ChevronRight className="h-5 w-5" />
         </Button>
       </div>

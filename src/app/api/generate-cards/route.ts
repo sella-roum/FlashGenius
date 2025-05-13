@@ -9,7 +9,7 @@ export async function POST(request: NextRequest) {
 
     // Basic validation - Zod validation would be more robust
     if (!body || typeof body !== 'object' || !body.inputType || !body.inputValue) {
-        return NextResponse.json({ error: 'Missing inputType or inputValue' }, { status: 400 });
+        return NextResponse.json({ error: 'inputTypeまたはinputValueがありません' }, { status: 400 });
     }
 
     const input: GenerateFlashcardsInput = {
@@ -25,19 +25,19 @@ export async function POST(request: NextRequest) {
     //     return NextResponse.json({ error: 'Invalid input data', details: validationResult.error.errors }, { status: 400 });
     // }
 
-    console.log("Calling generateFlashcards flow with input:", input); // Server-side log
+    console.log("generateFlashcardsフローを呼び出し中、入力:", input); // Server-side log
 
     // Call the Genkit flow
     const result = await generateFlashcards(input);
 
-    console.log("generateFlashcards flow returned:", result); // Server-side log
+    console.log("generateFlashcardsフローの戻り値:", result); // Server-side log
 
     return NextResponse.json(result);
 
   } catch (error: any) {
-    console.error('[API /generate-cards] Error:', error);
+    console.error('[API /generate-cards] エラー:', error);
     // Provide a generic error message to the client
-    return NextResponse.json({ error: error.message || 'Failed to generate flashcards' }, { status: 500 });
+    return NextResponse.json({ error: error.message || 'フラッシュカードの生成に失敗しました' }, { status: 500 });
   }
 }
 

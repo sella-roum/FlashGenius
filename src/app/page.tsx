@@ -9,5 +9,5 @@ export default function RootPage() {
   }, []);
 
   // Render minimal content while redirecting
-  return <div className="flex h-screen items-center justify-center">Loading...</div>;
+  return <div className="flex h-screen items-center justify-center">読み込み中...</div>;
 }

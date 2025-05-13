@@ -14,10 +14,10 @@ import {
 } from '@/components/ui/tooltip';
 
 const navigation = [
-  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'Generate', href: '/generate', icon: PlusSquare },
-  { name: 'Library', href: '/library', icon: Boxes },
-  { name: 'Study', href: '/study', icon: BookOpen }, // Link might need adjustment based on study flow
+  { name: 'ダッシュボード', href: '/dashboard', icon: LayoutDashboard },
+  { name: '生成', href: '/generate', icon: PlusSquare },
+  { name: 'ライブラリ', href: '/library', icon: Boxes },
+  { name: '学習', href: '/study', icon: BookOpen }, // Link might need adjustment based on study flow
 ];
 
 export function Header() {

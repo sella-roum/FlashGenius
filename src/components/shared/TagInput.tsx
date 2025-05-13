@@ -14,7 +14,7 @@ interface TagInputProps {
   className?: string;
 }
 
-export function TagInput({ value = [], onChange, placeholder = "Add tags...", className }: TagInputProps) {
+export function TagInput({ value = [], onChange, placeholder = "タグを追加...", className }: TagInputProps) {
   const [inputValue, setInputValue] = useState('');
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -52,7 +52,7 @@ export function TagInput({ value = [], onChange, placeholder = "Add tags...", cl
             type="button"
             onClick={() => removeTag(tag)}
             className="rounded-full p-0.5 hover:bg-muted-foreground/20 focus:outline-none focus:ring-1 focus:ring-ring"
-            aria-label={`Remove ${tag}`}
+            aria-label={`${tag}を削除`}
           >
             <X className="h-3 w-3" />
           </button>
@@ -67,7 +67,7 @@ export function TagInput({ value = [], onChange, placeholder = "Add tags...", cl
         className="h-auto flex-1 border-none p-0 shadow-none focus-visible:ring-0"
       />
       {/* Optionally add an explicit "Add" button */}
-       {/* <Button type="button" size="sm" variant="ghost" onClick={addTag} disabled={!inputValue.trim()}>Add</Button> */}
+       {/* <Button type="button" size="sm" variant="ghost" onClick={addTag} disabled={!inputValue.trim()}>追加</Button> */}
     </div>
   );
 }

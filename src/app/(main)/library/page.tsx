@@ -11,43 +11,43 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Info } from 'lucide-react';
 
 export default function LibraryPage() {
-  const { allCardSets, availableThemes, availableTags } = useIndexedDB();
+  const { allCardSets, availableThemes, availableTags, isLoading: isDbLoading } = useIndexedDB();
   // Destructure setters and filtered sets directly
   const {
       filteredCardSets,
       setAllCardSets,
       setAvailableThemes,
-      setAvailableTags
+      setAvailableTags,
+      libraryLoading,
   } = useStore((state) => ({
       filteredCardSets: state.library.filteredCardSets,
       setAllCardSets: state.library.setAllCardSets,
       setAvailableThemes: state.library.setAvailableThemes,
       setAvailableTags: state.library.setAvailableTags,
+      libraryLoading: state.library.isLoading,
   }));
 
    // Check if the initial data load from IndexedDB is complete
-   const isLoading = allCardSets === undefined || availableThemes === undefined || availableTags === undefined;
+   const isLoading = isDbLoading || libraryLoading;
 
 
    // Effect to load data from IndexedDB hook into Zustand store
    useEffect(() => {
-     if (!isLoading) {
-       setAllCardSets(allCardSets ?? []); // Pass data or empty array
+     if (!isDbLoading) { // only update from DB when DB loading is false
+       setAllCardSets(allCardSets ?? []);
        setAvailableThemes(availableThemes ?? []);
        setAvailableTags(availableTags ?? []);
      }
-     // Dependencies ensure this runs when data is loaded or changes
-     // Setters are now stable references
-   }, [isLoading, allCardSets, availableThemes, availableTags, setAllCardSets, setAvailableThemes, setAvailableTags]);
+   }, [isDbLoading, allCardSets, availableThemes, availableTags, setAllCardSets, setAvailableThemes, setAvailableTags]);
 
 
   return (
     <div>
-      <PageTitle title="Card Library" subtitle="Browse, manage, and study your flashcard sets." />
+      <PageTitle title="カードライブラリ" subtitle="フラッシュカードセットを閲覧、管理、学習します。" />
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
         <div className="md:col-span-1">
-          <h2 className="mb-4 text-lg font-semibold">Filters</h2>
+          <h2 className="mb-4 text-lg font-semibold">フィルター</h2>
            {isLoading ? (
                <div className="space-y-4">
                    <Skeleton className="h-8 w-full" />
@@ -61,7 +61,7 @@ export default function LibraryPage() {
 
         <div className="md:col-span-3">
            <h2 className="mb-4 text-lg font-semibold">
-                {isLoading ? 'Loading...' : `${filteredCardSets.length} Card Set${filteredCardSets.length !== 1 ? 's' : ''} Found`}
+                {isLoading ? '読み込み中...' : `${filteredCardSets.length} 件のカードセットが見つかりました`}
            </h2>
            {isLoading ? (
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -74,9 +74,9 @@ export default function LibraryPage() {
            ) : (
                <Alert>
                  <Info className="h-4 w-4" />
-                 <AlertTitle>No Card Sets Found</AlertTitle>
+                 <AlertTitle>カードセットが見つかりません</AlertTitle>
                  <AlertDescription>
-                    No card sets match the current filters, or your library is empty. Try generating some new cards!
+                    現在のフィルターに一致するカードセットがないか、ライブラリが空です。新しいカードを生成してみてください！
                  </AlertDescription>
                </Alert>
            )}

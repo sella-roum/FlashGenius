@@ -49,30 +49,30 @@ export function PreviewAndSave() {
             {/* Metadata Inputs */}
             <div className="space-y-4">
                 <div>
-                    <Label htmlFor="cardSetName">Card Set Name <span className="text-destructive">*</span></Label>
+                    <Label htmlFor="cardSetName">カードセット名 <span className="text-destructive">*</span></Label>
                     <Input
                         id="cardSetName"
-                        placeholder="e.g., Chapter 1 Vocabulary"
+                        placeholder="例：第1章の語彙"
                         value={cardSetName}
                         onChange={(e) => setCardSetName(e.target.value)}
                         required
                     />
                 </div>
                 <div>
-                    <Label htmlFor="cardSetTheme">Theme / Subject (Optional)</Label>
+                    <Label htmlFor="cardSetTheme">テーマ / 科目 (任意)</Label>
                     <Input
                         id="cardSetTheme"
-                        placeholder="e.g., Biology, History, Programming"
+                        placeholder="例：生物学、歴史、プログラミング"
                         value={cardSetTheme}
                         onChange={(e) => setCardSetTheme(e.target.value)}
                     />
                 </div>
                  <div>
-                     <Label htmlFor="cardSetTags">Tags (Optional)</Label>
+                     <Label htmlFor="cardSetTags">タグ (任意)</Label>
                      <TagInput
                          value={cardSetTags}
                          onChange={setCardSetTags}
-                         placeholder="Press Enter or comma to add tags..."
+                         placeholder="Enterキーまたはコンマでタグを追加..."
                      />
                  </div>
             </div>
@@ -82,18 +82,18 @@ export function PreviewAndSave() {
              {/* Card Preview List */}
              <div className="space-y-4">
                  <div className="flex justify-between items-center">
-                    <h3 className="text-lg font-medium">Generated Cards ({previewCards.length})</h3>
+                    <h3 className="text-lg font-medium">生成されたカード ({previewCards.length})</h3>
                     <Button variant="outline" size="sm" onClick={handleAddCard} disabled={isLoading}>
-                        <PlusCircle className="mr-2 h-4 w-4" /> Add Card
+                        <PlusCircle className="mr-2 h-4 w-4" /> カードを追加
                     </Button>
                  </div>
 
                 {previewCards.length === 0 && !isLoading && (
                      <Alert>
                          <Info className="h-4 w-4" />
-                         <AlertTitle>No Cards Generated Yet</AlertTitle>
+                         <AlertTitle>まだカードが生成されていません</AlertTitle>
                          <AlertDescription>
-                           Provide content and click "Generate Preview" to see cards here.
+                           コンテンツを提供し、「プレビューを生成」をクリックすると、ここにカードが表示されます。
                          </AlertDescription>
                      </Alert>
                 )}

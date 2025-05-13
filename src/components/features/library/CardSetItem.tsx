@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { BookOpen, CalendarDays, Edit, Tag as TagIcon, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
+import { ja } from 'date-fns/locale'; // Import Japanese locale
 import { useIndexedDB } from '@/lib/hooks/useIndexedDB';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -33,11 +34,11 @@ export function CardSetItem({ cardSet }: CardSetItemProps) {
     const handleDelete = async () => {
         try {
             await deleteCardSet(cardSet.id);
-            toast({ title: "Success", description: `Card set "${cardSet.name}" deleted.` });
+            toast({ title: "成功", description: `カードセット「${cardSet.name}」を削除しました。` });
             // Zustand store managing library list will update via useLiveQuery
         } catch (error: any) {
-            console.error("Failed to delete card set:", error);
-            toast({ variant: "destructive", title: "Error", description: `Failed to delete card set: ${error.message}` });
+            console.error("カードセットの削除に失敗しました:", error);
+            toast({ variant: "destructive", title: "エラー", description: `カードセットの削除に失敗しました: ${error.message}` });
         }
     };
 
@@ -47,12 +48,12 @@ export function CardSetItem({ cardSet }: CardSetItemProps) {
       <CardHeader>
         <CardTitle className="text-lg">{cardSet.name}</CardTitle>
         <CardDescription>
-          {cardSet.cards.length} card{cardSet.cards.length !== 1 ? 's' : ''}
+          {cardSet.cards.length} 枚のカード
           {cardSet.theme && ` • ${cardSet.theme}`}
         </CardDescription>
          <div className="flex items-center text-xs text-muted-foreground pt-1">
             <CalendarDays className="mr-1 h-3 w-3" />
-            Created: {format(new Date(cardSet.createdAt), 'MMM d, yyyy')}
+            作成日: {format(new Date(cardSet.createdAt), 'yyyy年M月d日', { locale: ja })}
         </div>
       </CardHeader>
       <CardContent className="flex-grow">
@@ -69,35 +70,34 @@ export function CardSetItem({ cardSet }: CardSetItemProps) {
       </CardContent>
       <CardFooter className="flex justify-between gap-2 pt-4 border-t">
          <Button asChild size="sm">
-            <Link href={`/study?setIds=${cardSet.id}`} aria-label={`Study ${cardSet.name}`}>
-                <BookOpen className="mr-2 h-4 w-4" /> Study
+            <Link href={`/study?setIds=${cardSet.id}`} aria-label={`${cardSet.name}を学習`}>
+                <BookOpen className="mr-2 h-4 w-4" /> 学習
             </Link>
          </Button>
          <div className="flex gap-1">
              {/* Edit Button (links to generate page with pre-filled data?) */}
              {/* <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
-                <Link href={`/generate?edit=${cardSet.id}`} aria-label={`Edit ${cardSet.name}`}>
+                <Link href={`/generate?edit=${cardSet.id}`} aria-label={`${cardSet.name}を編集`}>
                      <Edit className="h-4 w-4" />
                 </Link>
              </Button> */}
              <AlertDialog>
                 <AlertDialogTrigger asChild>
-                     <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10" aria-label={`Delete ${cardSet.name}`}>
+                     <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10" aria-label={`${cardSet.name}を削除`}>
                          <Trash2 className="h-4 w-4" />
                      </Button>
                 </AlertDialogTrigger>
                 <AlertDialogContent>
                     <AlertDialogHeader>
-                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                    <AlertDialogTitle>本当に削除しますか？</AlertDialogTitle>
                     <AlertDialogDescription>
-                        This action cannot be undone. This will permanently delete the card set
-                        "{cardSet.name}" and all its cards.
+                        この操作は元に戻せません。カードセット「{cardSet.name}」とそのすべてのカードが完全に削除されます。
                     </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogCancel>キャンセル</AlertDialogCancel>
                     <AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">
-                        Delete
+                        削除
                     </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>

@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import type { CardSet } from '@/types';
 import { formatDistanceToNow } from 'date-fns';
+import { ja } from 'date-fns/locale'; // Import Japanese locale
 import { ArrowRight } from 'lucide-react';
 
 interface RecentActivityProps {
@@ -20,15 +21,15 @@ export function RecentActivity({ cardSets = [] }: RecentActivityProps) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Recent Activity</CardTitle>
-          <CardDescription>No recent card sets generated yet.</CardDescription>
+          <CardTitle>最近のアクティビティ</CardTitle>
+          <CardDescription>最近生成されたカードセットはありません。</CardDescription>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground">
-            Generate your first card set to see it here!
+            最初のカードセットを生成するとここに表示されます！
           </p>
            <Button asChild variant="link" className="p-0 h-auto mt-2">
-               <Link href="/generate">Generate New Set <ArrowRight className="ml-1 h-4 w-4"/></Link>
+               <Link href="/generate">新しいセットを生成 <ArrowRight className="ml-1 h-4 w-4"/></Link>
            </Button>
         </CardContent>
       </Card>
@@ -38,8 +39,8 @@ export function RecentActivity({ cardSets = [] }: RecentActivityProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Recently Generated Sets</CardTitle>
-        <CardDescription>Your latest flashcard creations.</CardDescription>
+        <CardTitle>最近生成されたセット</CardTitle>
+        <CardDescription>あなたの最新のフラッシュカード作成物。</CardDescription>
       </CardHeader>
       <CardContent>
         <ul className="space-y-4">
@@ -50,19 +51,19 @@ export function RecentActivity({ cardSets = [] }: RecentActivityProps) {
                   {set.name}
                 </Link>
                 <p className="text-sm text-muted-foreground">
-                  {set.cards.length} cards • Created {formatDistanceToNow(new Date(set.createdAt), { addSuffix: true })}
+                  {set.cards.length} 枚のカード • {formatDistanceToNow(new Date(set.createdAt), { addSuffix: true, locale: ja })}作成
                 </p>
               </div>
                <Button asChild variant="outline" size="sm">
                     {/* Link to study session for this specific set */}
-                    <Link href={`/study?setIds=${set.id}`}>Study</Link>
+                    <Link href={`/study?setIds=${set.id}`}>学習する</Link>
                </Button>
             </li>
           ))}
         </ul>
          {cardSets.length > 5 && (
              <Button asChild variant="link" className="p-0 h-auto mt-4">
-                 <Link href="/library">View All Sets <ArrowRight className="ml-1 h-4 w-4"/></Link>
+                 <Link href="/library">全てのセットを見る <ArrowRight className="ml-1 h-4 w-4"/></Link>
              </Button>
          )}
       </CardContent>

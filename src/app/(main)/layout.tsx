@@ -3,8 +3,8 @@ import { Header } from '@/components/shared/Header';
 import { Footer } from '@/components/shared/Footer';
 
 export const metadata: Metadata = {
-  title: 'FlashGenius App', // More specific title for app sections
-  description: 'Manage and study your flashcards',
+  title: 'FlashGenius アプリ', // More specific title for app sections
+  description: 'フラッシュカードを管理・学習しましょう',
 };
 
 export default function MainLayout({
@@ -25,4 +25,3 @@ export default function MainLayout({
     </div>
   );
 }
-

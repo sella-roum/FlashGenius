@@ -29,7 +29,7 @@ export function GenerationOptions() {
   return (
     <div className="space-y-4">
       <div>
-        <Label htmlFor="cardType" className="mb-2 block">Card Type</Label>
+        <Label htmlFor="cardType" className="mb-2 block">カードタイプ</Label>
         <RadioGroup
             id="cardType"
             value={options.cardType}
@@ -38,35 +38,35 @@ export function GenerationOptions() {
         >
             <div className="flex items-center space-x-2">
                 <RadioGroupItem value="term-definition" id="type-term"/>
-                <Label htmlFor="type-term">Term/Definition</Label>
+                <Label htmlFor="type-term">用語/定義</Label>
             </div>
              <div className="flex items-center space-x-2">
                 <RadioGroupItem value="qa" id="type-qa" />
-                <Label htmlFor="type-qa">Q & A</Label>
+                <Label htmlFor="type-qa">Q &amp; A</Label>
              </div>
              {/* Add more types as needed */}
               {/* <div className="flex items-center space-x-2">
                  <RadioGroupItem value="image-description" id="type-image" />
-                 <Label htmlFor="type-image">Image Description</Label>
+                 <Label htmlFor="type-image">画像説明</Label>
               </div> */}
         </RadioGroup>
       </div>
 
       <div>
-        <Label htmlFor="language">Language</Label>
+        <Label htmlFor="language">言語</Label>
         <Select
             value={options.language}
             onValueChange={(value) => handleOptionChange('language', value)}
         >
           <SelectTrigger id="language">
-            <SelectValue placeholder="Select language" />
+            <SelectValue placeholder="言語を選択" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="English">English</SelectItem>
-            <SelectItem value="Japanese">Japanese</SelectItem>
-            <SelectItem value="Spanish">Spanish</SelectItem>
-            <SelectItem value="French">French</SelectItem>
-            <SelectItem value="German">German</SelectItem>
+            <SelectItem value="English">英語</SelectItem>
+            <SelectItem value="Japanese">日本語</SelectItem>
+            <SelectItem value="Spanish">スペイン語</SelectItem>
+            <SelectItem value="French">フランス語</SelectItem>
+            <SelectItem value="German">ドイツ語</SelectItem>
             {/* Add more languages */}
           </SelectContent>
         </Select>
@@ -75,13 +75,13 @@ export function GenerationOptions() {
       {/* Add more options here (e.g., desired number of cards, difficulty) */}
       {/* Example:
       <div>
-        <Label htmlFor="cardCount">Approximate Card Count</Label>
+        <Label htmlFor="cardCount">おおよそのカード数</Label>
         <Input
           id="cardCount"
           type="number"
           min="5"
           max="100"
-          placeholder="e.g., 20"
+          placeholder="例: 20"
           // value={options.count || ''}
           // onChange={(e) => handleOptionChange('count', parseInt(e.target.value) || undefined)}
         />

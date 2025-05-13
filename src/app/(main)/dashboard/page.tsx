@@ -10,37 +10,37 @@ import { useStore } from '@/lib/store';
 import { Skeleton } from '@/components/ui/skeleton'; // For loading state
 
 export default function DashboardPage() {
-  const { allCardSets, availableThemes, availableTags } = useIndexedDB();
+  const { allCardSets, availableThemes, availableTags, isLoading: isDbLoading } = useIndexedDB();
   // Destructure setters directly
-  const { setAllCardSets, setAvailableThemes, setAvailableTags } = useStore((state) => ({
+  const { setAllCardSets, setAvailableThemes, setAvailableTags, libraryLoading } = useStore((state) => ({
       setAllCardSets: state.library.setAllCardSets,
       setAvailableThemes: state.library.setAvailableThemes,
       setAvailableTags: state.library.setAvailableTags,
+      libraryLoading: state.library.isLoading,
   }));
 
-  const isLoading = allCardSets === undefined || availableThemes === undefined || availableTags === undefined;
+  const isLoading = isDbLoading || libraryLoading;
 
   useEffect(() => {
-      if (!isLoading) {
-          setAllCardSets(allCardSets ?? []); // Pass data or empty array
+      if (!isDbLoading) { // only update from DB when DB loading is false
+          setAllCardSets(allCardSets ?? []);
           setAvailableThemes(availableThemes ?? []);
           setAvailableTags(availableTags ?? []);
       }
-      // Now the setters are stable references
-  }, [isLoading, allCardSets, availableThemes, availableTags, setAllCardSets, setAvailableThemes, setAvailableTags]);
+  }, [isDbLoading, allCardSets, availableThemes, availableTags, setAllCardSets, setAvailableThemes, setAvailableTags]);
 
   return (
     <div>
-      <PageTitle title="Dashboard" subtitle="Welcome back! Here's your learning overview." />
+      <PageTitle title="ダッシュボード" subtitle="おかえりなさい！学習の概要はこちらです。" />
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
          <section className="lg:col-span-2">
-             <h2 className="mb-4 text-xl font-semibold">Quick Access</h2>
+             <h2 className="mb-4 text-xl font-semibold">クイックアクセス</h2>
              <QuickAccess />
          </section>
 
          <section>
-             <h2 className="mb-4 text-xl font-semibold">Study Suggestions</h2>
+             <h2 className="mb-4 text-xl font-semibold">おすすめの学習</h2>
              {isLoading ? (
                 <div className="space-y-2">
                     <Skeleton className="h-16 w-full" />
@@ -52,7 +52,7 @@ export default function DashboardPage() {
          </section>
 
          <section className="lg:col-span-3">
-              <h2 className="mb-4 text-xl font-semibold">Recent Activity</h2>
+              <h2 className="mb-4 text-xl font-semibold">最近のアクティビティ</h2>
                {isLoading ? (
                  <div className="space-y-2">
                      <Skeleton className="h-16 w-full" />

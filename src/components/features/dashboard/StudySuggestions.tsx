@@ -22,15 +22,15 @@ export function StudySuggestions({ cardSets = [] }: StudySuggestionsProps) {
       return (
          <Card>
             <CardHeader>
-               <CardTitle>Study Suggestions</CardTitle>
-               <CardDescription>No sets available to study.</CardDescription>
+               <CardTitle>おすすめの学習</CardTitle>
+               <CardDescription>学習できるセットがありません。</CardDescription>
             </CardHeader>
             <CardContent>
                <p className="text-sm text-muted-foreground">
-               Generate or import some card sets to get started.
+               カードセットを生成またはインポートして始めましょう。
                </p>
                <Button asChild variant="link" className="p-0 h-auto mt-2">
-                   <Link href="/generate">Generate New Set <ArrowRight className="ml-1 h-4 w-4"/></Link>
+                   <Link href="/generate">新しいセットを生成 <ArrowRight className="ml-1 h-4 w-4"/></Link>
                </Button>
             </CardContent>
          </Card>
@@ -41,17 +41,17 @@ export function StudySuggestions({ cardSets = [] }: StudySuggestionsProps) {
    return (
     <Card>
       <CardHeader>
-        <CardTitle>Ready to Study?</CardTitle>
-        <CardDescription>Here's a set you could review:</CardDescription>
+        <CardTitle>学習の準備はできましたか？</CardTitle>
+        <CardDescription>復習におすすめのセットはこちらです：</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="flex items-center justify-between gap-4">
             <div>
                  <p className="font-medium">{oldestSet.name}</p>
-                 <p className="text-sm text-muted-foreground">{oldestSet.cards.length} cards</p>
+                 <p className="text-sm text-muted-foreground">{oldestSet.cards.length} 枚のカード</p>
             </div>
             <Button asChild>
-                <Link href={`/study?setIds=${oldestSet.id}`}>Study Now</Link>
+                <Link href={`/study?setIds=${oldestSet.id}`}>今すぐ学習</Link>
             </Button>
         </div>
          {/* Add more suggestions based on SRS logic later */}

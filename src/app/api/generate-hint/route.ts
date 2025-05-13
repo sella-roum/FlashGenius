@@ -9,7 +9,7 @@ export async function POST(request: NextRequest) {
 
     // Basic validation
      if (!body || typeof body !== 'object' || typeof body.front !== 'string' || typeof body.back !== 'string') {
-        return NextResponse.json({ error: 'Missing or invalid front/back card content' }, { status: 400 });
+        return NextResponse.json({ error: 'カードの表面/裏面のコンテンツがないか、無効です' }, { status: 400 });
      }
 
     const input: RequestAiGeneratedHintInput = {
@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(result);
 
   } catch (error: any) {
-    console.error('[API /generate-hint] Error:', error);
-    return NextResponse.json({ error: error.message || 'Failed to generate hint' }, { status: 500 });
+    console.error('[API /generate-hint] エラー:', error);
+    return NextResponse.json({ error: error.message || 'ヒントの生成に失敗しました' }, { status: 500 });
   }
 }

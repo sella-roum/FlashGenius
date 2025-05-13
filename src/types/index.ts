@@ -29,6 +29,6 @@ export interface CardSet {
 // Represents options for generating flashcards
 export interface GenerationOptions {
   cardType: 'term-definition' | 'qa' | 'image-description'; // Example types
-  language: string; // e.g., 'Japanese', 'English'
+  language: string; // e.g., '日本語', '英語'
   // Add other Gemini instruction options here
 }

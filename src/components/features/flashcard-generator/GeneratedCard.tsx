@@ -35,32 +35,32 @@ export function GeneratedCard({ index, card, onUpdate, onDelete }: GeneratedCard
           size="icon"
           className="absolute top-2 right-2 h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
           onClick={handleDelete}
-          aria-label="Delete card"
+          aria-label="カードを削除"
         >
           <Trash2 className="h-4 w-4" />
        </Button>
        <CardHeader className="pb-2 pt-4 pr-10"> {/* Add padding right to avoid overlap with delete button */}
-           <p className="text-sm font-medium text-muted-foreground">Card {index + 1}</p>
+           <p className="text-sm font-medium text-muted-foreground">カード {index + 1}</p>
        </CardHeader>
       <CardContent className="space-y-3">
         <div>
-          <Label htmlFor={`card-front-${index}`} className="mb-1 block text-xs font-medium">Front</Label>
+          <Label htmlFor={`card-front-${index}`} className="mb-1 block text-xs font-medium">表面</Label>
           <Textarea
             id={`card-front-${index}`}
             value={card.front}
             onChange={handleFrontChange}
-            placeholder="Card front content"
+            placeholder="カード表面のコンテンツ"
             rows={3}
             className="resize-none"
           />
         </div>
         <div>
-          <Label htmlFor={`card-back-${index}`} className="mb-1 block text-xs font-medium">Back</Label>
+          <Label htmlFor={`card-back-${index}`} className="mb-1 block text-xs font-medium">裏面</Label>
           <Textarea
             id={`card-back-${index}`}
             value={card.back}
             onChange={handleBackChange}
-            placeholder="Card back content"
+            placeholder="カード裏面のコンテンツ"
             rows={3}
             className="resize-none"
           />

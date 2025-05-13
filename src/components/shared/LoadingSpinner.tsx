@@ -11,13 +11,13 @@ export function LoadingSpinner({ size = 24, className }: LoadingSpinnerProps) {
     <Loader2
       className={cn('animate-spin text-primary', className)}
       style={{ width: size, height: size }}
-      aria-label="Loading..."
+      aria-label="読み込み中..."
     />
   );
 }
 
 // Optional: Full page loading overlay
-export function FullPageLoading({ message = "Loading..." }: { message?: string }) {
+export function FullPageLoading({ message = "読み込み中..." }: { message?: string }) {
     return (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm">
             <LoadingSpinner size={48} />

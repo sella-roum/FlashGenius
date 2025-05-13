@@ -29,14 +29,14 @@ function StudyPageContent() {
             setIsLoading(true);
             setError(null);
             if (!cardSetIdsParam) {
-                 setError('No card set IDs provided for studying.');
+                 setError('学習するカードセットIDが提供されていません。');
                  setIsLoading(false);
                  return;
             }
 
             const setIds = cardSetIdsParam.split(',');
             if (setIds.length === 0) {
-                 setError('Invalid card set IDs provided.');
+                 setError('無効なカードセットIDが提供されました。');
                  setIsLoading(false);
                  return;
             }
@@ -48,19 +48,19 @@ function StudyPageContent() {
                     if (cardSet) {
                         setsToStudy.push(cardSet);
                     } else {
-                        console.warn(`Card set with ID ${id} not found.`);
+                        console.warn(`カードセットID ${id} が見つかりません。`);
                         // Optionally inform the user about missing sets
                     }
                 }
 
                 if (setsToStudy.length === 0) {
-                    setError('Could not find any of the specified card sets.');
+                    setError('指定されたカードセットが見つかりませんでした。');
                 } else {
                     startStudySession(setsToStudy);
                 }
             } catch (err: any) {
-                console.error('Failed to load study session:', err);
-                setError(err.message || 'Failed to load card sets for studying.');
+                console.error('学習セッションの読み込みに失敗しました:', err);
+                setError(err.message || '学習用カードセットの読み込みに失敗しました。');
             } finally {
                 setIsLoading(false);
             }
@@ -78,7 +78,7 @@ function StudyPageContent() {
         return (
              <div className="flex flex-col items-center justify-center pt-10">
                 <LoadingSpinner size={40} />
-                <p className="mt-4 text-muted-foreground">Loading study session...</p>
+                <p className="mt-4 text-muted-foreground">学習セッションを読み込み中...</p>
             </div>
         );
     }
@@ -87,12 +87,12 @@ function StudyPageContent() {
          return (
              <Alert variant="destructive" className="mt-6">
                <BookX className="h-4 w-4" />
-               <AlertTitle>Error Loading Study Session</AlertTitle>
+               <AlertTitle>学習セッションの読み込みエラー</AlertTitle>
                <AlertDescription>
-                 {error} Please check the URL or go back to the library.
+                 {error} URLを確認するか、ライブラリに戻ってください。
                   <div className="mt-4">
                       <Button asChild variant="outline">
-                          <Link href="/library">Go to Library</Link>
+                          <Link href="/library">ライブラリへ</Link>
                       </Button>
                   </div>
                </AlertDescription>
@@ -104,14 +104,14 @@ function StudyPageContent() {
       // Study session completed
        return (
              <div className="text-center pt-10">
-                <h2 className="text-2xl font-semibold mb-4">Session Complete!</h2>
-                <p className="text-muted-foreground mb-6">You've reviewed all the cards in this session.</p>
+                <h2 className="text-2xl font-semibold mb-4">セッション完了！</h2>
+                <p className="text-muted-foreground mb-6">このセッションのすべてのカードを確認しました。</p>
                 <div className="flex justify-center gap-4">
-                   <Button variant="outline" onClick={() => startStudySession(studyState.originalDeck.length > 0 ? [{ id: studyState.activeCardSetIds[0], name: 'Restart Set', cards: studyState.originalDeck, tags: [], createdAt: new Date(), updatedAt: new Date() }] : [])}> {/* Simplified restart */}
-                      Study Again
+                   <Button variant="outline" onClick={() => startStudySession(studyState.originalDeck.length > 0 ? [{ id: studyState.activeCardSetIds[0], name: 'セットを再開', cards: studyState.originalDeck, tags: [], createdAt: new Date(), updatedAt: new Date() }] : [])}> {/* Simplified restart */}
+                      もう一度学習する
                   </Button>
                    <Button asChild>
-                       <Link href="/library">Back to Library</Link>
+                       <Link href="/library">ライブラリに戻る</Link>
                    </Button>
                 </div>
              </div>
@@ -123,12 +123,12 @@ function StudyPageContent() {
         return (
              <Alert variant="default" className="mt-6">
                  <BookX className="h-4 w-4" />
-                 <AlertTitle>Empty Deck</AlertTitle>
+                 <AlertTitle>空のデッキ</AlertTitle>
                  <AlertDescription>
-                     The selected card set(s) appear to be empty.
+                     選択されたカードセットは空のようです。
                       <div className="mt-4">
                          <Button asChild variant="outline">
-                             <Link href="/library">Go to Library</Link>
+                             <Link href="/library">ライブラリへ</Link>
                          </Button>
                      </div>
                  </AlertDescription>
@@ -145,8 +145,8 @@ export default function StudyPage() {
   // Use Suspense to wait for searchParams to be available
   return (
     <div>
-      <PageTitle title="Study Session" subtitle="Focus and learn your flashcards." />
-      <Suspense fallback={<div className="flex justify-center pt-10"><LoadingSpinner size={40} /></div>}>
+      <PageTitle title="学習セッション" subtitle="フラッシュカードに集中して学習しましょう。" />
+      <Suspense fallback={<div className="flex justify-center pt-10"><LoadingSpinner size={40} /> <p className="ml-2">読み込み中...</p></div>}>
         <StudyPageContent />
       </Suspense>
     </div>

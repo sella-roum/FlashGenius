@@ -13,8 +13,8 @@ export function QuickAccess() {
                     <Link href="/generate">
                         <PlusSquare className="h-5 w-5" />
                          <div>
-                             <p className="font-semibold">Generate New Set</p>
-                             <p className="text-sm text-muted-foreground text-left">Create cards from text, URL, or file.</p>
+                             <p className="font-semibold">新しいセットを生成</p>
+                             <p className="text-sm text-muted-foreground text-left">テキスト、URL、ファイルからカードを作成</p>
                          </div>
                     </Link>
                 </Button>
@@ -22,8 +22,8 @@ export function QuickAccess() {
                     <Link href="/library">
                         <Boxes className="h-5 w-5" />
                          <div>
-                             <p className="font-semibold">Browse Library</p>
-                             <p className="text-sm text-muted-foreground text-left">View and manage your card sets.</p>
+                             <p className="font-semibold">ライブラリを見る</p>
+                             <p className="text-sm text-muted-foreground text-left">カードセットの表示と管理</p>
                          </div>
                     </Link>
                 </Button>
