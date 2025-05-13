@@ -12,6 +12,7 @@ import { Info } from 'lucide-react';
 
 export default function LibraryPage() {
   const { allCardSets, availableThemes, availableTags } = useIndexedDB();
+  // Destructure setters and filtered sets directly
   const {
       filteredCardSets,
       setAllCardSets,
@@ -31,11 +32,12 @@ export default function LibraryPage() {
    // Effect to load data from IndexedDB hook into Zustand store
    useEffect(() => {
      if (!isLoading) {
-       setAllCardSets(allCardSets);
-       setAvailableThemes(availableThemes);
-       setAvailableTags(availableTags);
+       setAllCardSets(allCardSets ?? []); // Pass data or empty array
+       setAvailableThemes(availableThemes ?? []);
+       setAvailableTags(availableTags ?? []);
      }
      // Dependencies ensure this runs when data is loaded or changes
+     // Setters are now stable references
    }, [isLoading, allCardSets, availableThemes, availableTags, setAllCardSets, setAvailableThemes, setAvailableTags]);
 
 
@@ -59,7 +61,7 @@ export default function LibraryPage() {
 
         <div className="md:col-span-3">
            <h2 className="mb-4 text-lg font-semibold">
-                {filteredCardSets.length} Card Set{filteredCardSets.length !== 1 ? 's' : ''} Found
+                {isLoading ? 'Loading...' : `${filteredCardSets.length} Card Set${filteredCardSets.length !== 1 ? 's' : ''} Found`}
            </h2>
            {isLoading ? (
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">

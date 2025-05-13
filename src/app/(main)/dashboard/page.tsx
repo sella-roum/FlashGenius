@@ -11,7 +11,8 @@ import { Skeleton } from '@/components/ui/skeleton'; // For loading state
 
 export default function DashboardPage() {
   const { allCardSets, availableThemes, availableTags } = useIndexedDB();
-  const setLibraryData = useStore((state) => ({
+  // Destructure setters directly
+  const { setAllCardSets, setAvailableThemes, setAvailableTags } = useStore((state) => ({
       setAllCardSets: state.library.setAllCardSets,
       setAvailableThemes: state.library.setAvailableThemes,
       setAvailableTags: state.library.setAvailableTags,
@@ -21,11 +22,12 @@ export default function DashboardPage() {
 
   useEffect(() => {
       if (!isLoading) {
-          setLibraryData.setAllCardSets(allCardSets);
-          setLibraryData.setAvailableThemes(availableThemes);
-          setLibraryData.setAvailableTags(availableTags);
+          setAllCardSets(allCardSets ?? []); // Pass data or empty array
+          setAvailableThemes(availableThemes ?? []);
+          setAvailableTags(availableTags ?? []);
       }
-  }, [isLoading, allCardSets, availableThemes, availableTags, setLibraryData]);
+      // Now the setters are stable references
+  }, [isLoading, allCardSets, availableThemes, availableTags, setAllCardSets, setAvailableThemes, setAvailableTags]);
 
   return (
     <div>
