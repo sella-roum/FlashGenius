@@ -3,7 +3,7 @@ import { createContext, useContext } from 'react';
 import { createStore, useStore as useZustandStore, type StoreApi } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import type { CardSet, Flashcard, GenerationOptions, Tag } from '@/types';
-import { API_ENDPOINTS, MAX_FILE_SIZE_BYTES, ACCEPTED_MIME_TYPES, JINA_READER_URL_PREFIX } from '@/lib/constants';
+import { API_ENDPOINTS, MAX_FILE_SIZE_BYTES, ACCEPTED_MIME_TYPES } from '@/lib/constants'; // Removed JINA_READER_URL_PREFIX
 import type { GenerateFlashcardsInput, GenerateFlashcardsOutput } from '@/ai/flows/generate-flashcards';
 import type { ProvideDetailedExplanationInput } from '@/ai/flows/provide-detailed-explanations';
 import type { RequestAiGeneratedHintInput } from '@/ai/flows/provide-study-hints';
@@ -240,7 +240,7 @@ export const initializeStore = (initProps?: Partial<Store>): StoreApi<Store> => 
             state.generate.warningMessage = null;
           });
 
-          const MAX_INPUT_CHAR_LENGTH = 500000;
+          const MAX_INPUT_CHAR_LENGTH = 500000; // Max characters for text content
           let wasTruncated = false;
           let finalApiInputValue: string;
           let finalApiInputType: 'file' | 'text'; // 'url' will be converted to 'text'
@@ -273,13 +273,16 @@ export const initializeStore = (initProps?: Partial<Store>): StoreApi<Store> => 
                 set((state) => { state.generate.error = 'URLを入力してください。'; state.generate.isLoading = false; });
                 return;
               }
-              const fullUrlToFetch = inputValue.startsWith('http') ? inputValue : `${JINA_READER_URL_PREFIX}${inputValue}`;
-              console.log(`Frontend: URL「${fullUrlToFetch}」からコンテンツを取得しています`);
-              const response = await fetch(fullUrlToFetch);
-              if (!response.ok) {
-                throw new Error(`Jina AI からのURLコンテンツの取得に失敗しました: ${response.status} ${response.statusText}`);
+              // Fetch URL content via backend proxy
+              console.log(`Frontend: URL「${inputValue}」のコンテンツをバックエンド経由で取得しています`);
+              const proxyResponse = await fetch(`/api/fetch-url-content?url=${encodeURIComponent(inputValue)}`);
+              if (!proxyResponse.ok) {
+                  const errorData = await proxyResponse.json();
+                  throw new Error(errorData.error || `バックエンドプロキシ経由でのURLコンテンツ取得に失敗しました: ${proxyResponse.status} ${proxyResponse.statusText}`);
               }
-              let textContent = await response.text();
+              const proxyResult = await proxyResponse.json();
+              let textContent = proxyResult.content;
+              
               if (textContent.length > MAX_INPUT_CHAR_LENGTH) {
                 textContent = textContent.substring(0, MAX_INPUT_CHAR_LENGTH);
                 wasTruncated = true;
@@ -323,7 +326,7 @@ export const initializeStore = (initProps?: Partial<Store>): StoreApi<Store> => 
 
             set((state) => {
               state.generate.previewCards = cardsWithIds;
-              if (wasTruncated && !state.generate.warningMessage) {
+              if (wasTruncated && !state.generate.warningMessage) { // Only set truncation warning if not already set (e.g. by unsupported file type)
                 state.generate.warningMessage = `入力コンテンツが長すぎたため、最初の約${MAX_INPUT_CHAR_LENGTH.toLocaleString()}文字に切り詰められました。`;
               }
             });
@@ -453,10 +456,16 @@ export const initializeStore = (initProps?: Partial<Store>): StoreApi<Store> => 
         flipCard: () => set((state) => {
              if (state.study.currentCard) {
                 state.study.isFrontVisible = !state.study.isFrontVisible;
-                if (state.study.isFrontVisible) {
+                if (state.study.isFrontVisible) { // Switched to Front
+                    // If hint was already generated and cached on card, use it
+                    // If details were visible, they are now hidden implicitly by card flip
                     state.study.currentHint = state.study.currentCard?.hint || null;
-                } else {
+                    state.study.currentDetails = null; // Ensure details aren't shown on front
+                } else { // Switched to Back
+                    // If details were already generated and cached on card, use them
+                    // If hint was visible, it's now hidden implicitly by card flip
                     state.study.currentDetails = state.study.currentCard?.details || null;
+                    state.study.currentHint = null; // Ensure hint isn't shown on back
                 }
             }
          }),
@@ -467,10 +476,11 @@ export const initializeStore = (initProps?: Partial<Store>): StoreApi<Store> => 
                 const newCard = state.study.currentDeck[nextIndex];
                 state.study.currentCard = newCard;
                 state.study.isFrontVisible = true;
-                state.study.currentHint = newCard.hint || null;
-                state.study.currentDetails = newCard.details || null;
+                state.study.currentHint = newCard.hint || null; // Use cached hint if available
+                state.study.currentDetails = null; // Details are for back, clear when moving to new card front
             } else {
-                state.study.currentCardIndex = -1;
+                // End of deck
+                state.study.currentCardIndex = -1; // Or a special "completed" state
                 state.study.currentCard = null;
                 state.study.isFrontVisible = true;
                 state.study.currentHint = null;
@@ -487,24 +497,25 @@ export const initializeStore = (initProps?: Partial<Store>): StoreApi<Store> => 
                 const newCard = state.study.currentDeck[prevIndex];
                 state.study.currentCard = newCard;
                 state.study.isFrontVisible = true;
-                state.study.currentHint = newCard.hint || null;
-                state.study.currentDetails = newCard.details || null;
+                state.study.currentHint = newCard.hint || null; // Use cached hint
+                state.study.currentDetails = null; // Clear details
                 state.study.isHintLoading = false;
                 state.study.isDetailsLoading = false;
                 state.study.error = null;
             }
         }),
         fetchHint: async (forceRegenerate = false) => {
-           const { currentCard: cardFromGet, isHintLoading: currentIsHintLoading, currentHint: existingCurrentHint } = get().study;
+           const { currentCard: cardFromGet, isHintLoading: currentIsHintLoading, currentHint: existingCurrentHint, isFrontVisible } = get().study;
 
-           if (!cardFromGet || (currentIsHintLoading && !forceRegenerate)) return;
+           if (!cardFromGet || !isFrontVisible || (currentIsHintLoading && !forceRegenerate)) return;
 
-            if (!forceRegenerate && cardFromGet.hint) {
-                set(state => { state.study.currentHint = cardFromGet.hint; state.study.isHintLoading = false; state.study.error = null; });
-                return;
-            }
-            if (!forceRegenerate && existingCurrentHint) {
-                 return;
+            // If not forcing regeneration AND (a hint is already cached on the card OR a hint is in currentHint state), use it.
+            if (!forceRegenerate && (cardFromGet.hint || existingCurrentHint)) {
+                const hintToUse = existingCurrentHint || cardFromGet.hint;
+                if (hintToUse) { // Ensure there's actually a hint
+                    set(state => { state.study.currentHint = hintToUse; state.study.isHintLoading = false; state.study.error = null; });
+                    return;
+                }
             }
 
            set(state => { state.study.isHintLoading = true; state.study.error = null; state.study.currentHint = null; });
@@ -515,6 +526,7 @@ export const initializeStore = (initProps?: Partial<Store>): StoreApi<Store> => 
                 const result = await response.json();
                set(state => {
                  state.study.currentHint = result.hint;
+                 // Cache the generated hint on the card object itself for persistence during the session
                  const cardId = state.study.currentCard?.id;
                  if (cardId) {
                     const updateCardCache = (c: Flashcard) => { if (c.id === cardId) c.hint = result.hint; };
@@ -532,15 +544,15 @@ export const initializeStore = (initProps?: Partial<Store>): StoreApi<Store> => 
         },
         hideHint: () => set((state) => { state.study.currentHint = null; }),
         fetchDetails: async (forceRegenerate = false) => {
-           const { currentCard: cardFromGet, isDetailsLoading: currentIsDetailsLoading, currentDetails: existingCurrentDetails } = get().study;
-           if (!cardFromGet || (currentIsDetailsLoading && !forceRegenerate)) return;
+           const { currentCard: cardFromGet, isDetailsLoading: currentIsDetailsLoading, currentDetails: existingCurrentDetails, isFrontVisible } = get().study;
+           if (!cardFromGet || isFrontVisible || (currentIsDetailsLoading && !forceRegenerate)) return; // Only fetch if on back side
 
-            if (!forceRegenerate && cardFromGet.details) {
-                set(state => { state.study.currentDetails = cardFromGet.details; state.study.isDetailsLoading = false; state.study.error = null; });
-                return;
-            }
-            if (!forceRegenerate && existingCurrentDetails) {
-                return;
+            if (!forceRegenerate && (cardFromGet.details || existingCurrentDetails)) {
+                 const detailsToUse = existingCurrentDetails || cardFromGet.details;
+                 if (detailsToUse) {
+                    set(state => { state.study.currentDetails = detailsToUse; state.study.isDetailsLoading = false; state.study.error = null; });
+                    return;
+                 }
             }
 
             set(state => { state.study.isDetailsLoading = true; state.study.error = null; state.study.currentDetails = null; });
@@ -551,6 +563,7 @@ export const initializeStore = (initProps?: Partial<Store>): StoreApi<Store> => 
                  const result = await response.json();
                set(state => {
                  state.study.currentDetails = result.details;
+                 // Cache the generated details on the card object
                  const cardId = state.study.currentCard?.id;
                  if (cardId) {
                     const updateCardCache = (c: Flashcard) => { if (c.id === cardId) c.details = result.details; };
@@ -574,8 +587,8 @@ export const initializeStore = (initProps?: Partial<Store>): StoreApi<Store> => 
              const newCard = newShuffledDeck.length > 0 ? newShuffledDeck[0] : null;
              state.study.currentCard = newCard;
              state.study.isFrontVisible = true;
-             state.study.currentHint = newCard?.hint || null;
-             state.study.currentDetails = newCard?.details || null;
+             state.study.currentHint = newCard?.hint || null; // Use cached hint
+             state.study.currentDetails = null; // Clear details
              state.study.isHintLoading = false;
              state.study.isDetailsLoading = false;
              state.study.error = null;
