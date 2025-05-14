@@ -1,3 +1,4 @@
+
 'use client';
 
 import React from 'react';
@@ -80,10 +81,10 @@ export function FilterControls() {
         </div>
 
         {/* Tag Filter */}
-        {availableTags.length > 0 && (
-          <div>
-            <Label className="mb-2 block text-sm font-medium">タグ</Label>
-            <ScrollArea className="h-40 rounded-md border p-3"> {/* Adjust height */}
+        <div>
+          <Label className="mb-2 block text-sm font-medium">タグ (いずれかに一致)</Label>
+          {availableTags.length > 0 ? (
+            <ScrollArea className="h-40 rounded-md border p-3">
               <div className="space-y-2">
                 {availableTags.sort().map((tag) => (
                   <div key={tag} className="flex items-center space-x-2">
@@ -99,9 +100,14 @@ export function FilterControls() {
                 ))}
               </div>
             </ScrollArea>
-          </div>
-        )}
+          ) : (
+            <p className="text-sm text-muted-foreground p-3 border rounded-md bg-muted/50">
+              利用可能なタグはありません。
+            </p>
+          )}
+        </div>
       </CardContent>
     </Card>
   );
 }
+
