@@ -1,14 +1,15 @@
+
 'use client';
 
 import React from 'react';
 import { useStore } from '@/lib/store';
 import { GeneratedCard } from './GeneratedCard';
 import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
+// import { Input } from '@/components/ui/input'; // Replaced by Combobox for theme
+import { Combobox, type ComboboxOption } from '@/components/ui/combobox';
 import { TagInput } from '@/components/shared/TagInput';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, Trash2 } from 'lucide-react';
+import { PlusCircle } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Info } from 'lucide-react';
@@ -25,7 +26,9 @@ export function PreviewAndSave() {
         setCardSetTheme,
         cardSetTags,
         setCardSetTags,
-        isLoading
+        isLoading,
+        availableThemes, // Get available themes from store
+        availableTags    // Get available tags from store
     } = useStore((state) => ({
         previewCards: state.generate.previewCards,
         updatePreviewCard: state.generate.updatePreviewCard,
@@ -38,11 +41,15 @@ export function PreviewAndSave() {
         cardSetTags: state.generate.cardSetTags,
         setCardSetTags: state.generate.setCardSetTags,
         isLoading: state.generate.isLoading,
+        availableThemes: state.library.availableThemes,
+        availableTags: state.library.availableTags,
     }));
 
     const handleAddCard = () => {
         addPreviewCard();
     };
+
+    const themeOptions: ComboboxOption[] = availableThemes.map(theme => ({ value: theme, label: theme }));
 
     return (
         <div className="space-y-6">
@@ -56,15 +63,21 @@ export function PreviewAndSave() {
                         value={cardSetName}
                         onChange={(e) => setCardSetName(e.target.value)}
                         required
+                        className="mt-1" // Added for consistency
                     />
                 </div>
                 <div>
                     <Label htmlFor="cardSetTheme">テーマ / 科目 (任意)</Label>
-                    <Input
-                        id="cardSetTheme"
-                        placeholder="例：生物学、歴史、プログラミング"
+                    <Combobox
                         value={cardSetTheme}
-                        onChange={(e) => setCardSetTheme(e.target.value)}
+                        onChange={setCardSetTheme}
+                        options={themeOptions}
+                        placeholder="テーマを選択または入力"
+                        searchPlaceholder="テーマを検索または新規作成..."
+                        emptyText="一致するテーマがありません。"
+                        className="mt-1"
+                        allowCustomValue={true}
+                        customValueText={(inputValue) => `新規テーマ「${inputValue}」を追加`}
                     />
                 </div>
                  <div>
@@ -73,6 +86,8 @@ export function PreviewAndSave() {
                          value={cardSetTags}
                          onChange={setCardSetTags}
                          placeholder="Enterキーまたはコンマでタグを追加..."
+                         availableTags={availableTags} // Pass available tags for suggestions
+                         className="mt-1"
                      />
                  </div>
             </div>
@@ -117,3 +132,7 @@ export function PreviewAndSave() {
         </div>
     );
 }
+
+// Need to re-add Input if it was removed and is used elsewhere, or make sure it's used correctly.
+// For this specific case, Input for cardSetName is fine.
+import { Input } from '@/components/ui/input'; 
