@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview Generates flashcards from user input using the Gemini API.
@@ -12,7 +13,7 @@ import {z} from 'genkit';
 import type { GenerationOptions as GenOptionsType } from '@/types'; 
 import { JINA_READER_URL_PREFIX } from '@/lib/constants';
 
-const MAX_INPUT_CHAR_LENGTH_FOR_FLOW = 500000; // Character limit for content passed to LLM
+const MAX_INPUT_CHAR_LENGTH_FOR_FLOW = 500000; // Character limit for text content passed to LLM
 
 const GenerationOptionsSchema = z.object({
   cardType: z.enum(['term-definition', 'qa', 'image-description']).describe('The desired format for the flashcards (e.g., term/definition or question/answer).'),
@@ -20,12 +21,19 @@ const GenerationOptionsSchema = z.object({
   additionalPrompt: z.string().optional().describe('Optional user-provided instructions to further guide the generation process.'),
 });
 
+// Schema for the input the FLOW function receives
 const GenerateFlashcardsInputSchema = z.object({
-  inputType: z.enum(['file', 'url', 'text']).describe('The type of input provided by the user (file content is sent as text).'),
-  inputValue: z.string().describe('The input value (text content, or URL).'),
+  inputType: z.enum(['file', 'url', 'text']).describe('The type of input provided by the user.'),
+  inputValue: z.string().describe('The input value (text content, URL, or data URI for files).'),
   generationOptions: GenerationOptionsSchema.optional().describe('Options to customize the flashcard generation.'),
 });
 export type GenerateFlashcardsInput = z.infer<typeof GenerateFlashcardsInputSchema>;
+
+// Extended schema for the input the PROMPT itself receives
+const GenerateFlashcardsPromptInputSchema = GenerateFlashcardsInputSchema.extend({
+  isMediaInput: z.boolean().describe('Whether the inputValue is a media data URI (image/PDF).'),
+});
+
 
 const FlashcardSchema = z.object({
   front: z.string().describe('The front side of the flashcard (term or question).'),
@@ -34,35 +42,38 @@ const FlashcardSchema = z.object({
 
 const GenerateFlashcardsOutputSchema = z.object({
   cards: z.array(FlashcardSchema).describe('An array of generated flashcards.'),
+  // Optional: Add a field for warnings like backend truncation if needed
+  // warningMessage: z.string().optional().describe('Any warnings from the generation process.'),
 });
 export type GenerateFlashcardsOutput = z.infer<typeof GenerateFlashcardsOutputSchema>;
 
+
 export async function generateFlashcards(input: GenerateFlashcardsInput): Promise<GenerateFlashcardsOutput> {
-  const optionsWithDefaults: GenOptionsType = {
-      cardType: input.generationOptions?.cardType || 'term-definition',
-      language: input.generationOptions?.language || '日本語',
-      additionalPrompt: input.generationOptions?.additionalPrompt || '',
-  };
-  const flowInput = { ...input, generationOptions: optionsWithDefaults };
-  return generateFlashcardsFlow(flowInput);
+  // Default options are applied within the flow now before passing to prompt
+  return generateFlashcardsFlow(input);
 }
 
 const prompt = ai.definePrompt({
   name: 'generateFlashcardsPrompt',
-  input: {schema: GenerateFlashcardsInputSchema}, // Uses the same schema, but inputValue might be processed
+  input: {schema: GenerateFlashcardsPromptInputSchema}, // Use the extended schema for prompt
   output: {schema: GenerateFlashcardsOutputSchema},
   prompt: `あなたはフラッシュカード作成のエキスパートです。提供された情報源から、指定されたオプションに従って高品質なフラッシュカードを作成します。
 
-  **重要:** 生成されるカードは必ず指定された「言語」({{{generationOptions.language}}})でなければなりません。元の資料が異なる言語であっても、必ず「{{{generationOptions.language}}}」に翻訳・記述してください。
+  **重要:** 生成されるカードは必ず指定された「言語」({{{generationOptions.language}}})でなければなりません。元の資料が異なる言語であっても、必ず「{{{generationOptions.language}}}」に翻訳・記述してください。PDFや画像ファイルの内容も、指定された言語に翻訳してください。
 
   **カード形式:** カードは「{{{generationOptions.cardType}}}」の形式で生成してください。
   - 'term-definition': 表面に用語、裏面にその定義を記述します。
   - 'qa': 表面に質問、裏面にその答えを記述します。
+  - 'image-description': (画像入力の場合) 表面に画像、裏面にその説明を記述します。
 
   **情報源:**
   入力タイプ: {{{inputType}}}
+  {{#if isMediaInput}}
+  提供されたファイル (画像またはPDF): {{media url=inputValue}}
+  {{else}}
   内容:
   {{{inputValue}}}
+  {{/if}}
 
   {{#if generationOptions.additionalPrompt}}
   **追加の指示:**
@@ -76,6 +87,7 @@ const prompt = ai.definePrompt({
     safetySettings: [
       { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
       { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+      // Consider HARM_CATEGORY_DANGEROUS_CONTENT if dealing with arbitrary user files.
     ],
   },
 });
@@ -83,18 +95,19 @@ const prompt = ai.definePrompt({
 const generateFlashcardsFlow = ai.defineFlow(
   {
     name: 'generateFlashcardsFlow',
-    inputSchema: GenerateFlashcardsInputSchema,
+    inputSchema: GenerateFlashcardsInputSchema, // Flow input is the original schema
     outputSchema: GenerateFlashcardsOutputSchema,
   },
   async (flowInput) => {
-    let contentToProcess = flowInput.inputValue;
-    const originalInputTypeForPrompt = flowInput.inputType; // To inform LLM about original source type
+    let processedInputValue = flowInput.inputValue;
+    const originalInputType = flowInput.inputType;
+    let isMediaInput = false;
+    let backendTruncationWarning: string | null = null; // For flow-side truncations
 
-    if (flowInput.inputType === 'url') {
+    if (originalInputType === 'url') {
       try {
-        // Client sends raw URL. Flow prefixes with Jina and fetches.
         const fullUrlToFetch = flowInput.inputValue.startsWith('http') 
-          ? flowInput.inputValue // If client somehow sends a full Jina URL already
+          ? flowInput.inputValue
           : `${JINA_READER_URL_PREFIX}${flowInput.inputValue}`;
         
         console.log(`Flow: URL「${fullUrlToFetch}」からコンテンツを取得しています`);
@@ -102,25 +115,51 @@ const generateFlashcardsFlow = ai.defineFlow(
         if (!response.ok) {
           throw new Error(`Jina AI からのURLコンテンツの取得に失敗しました: ${response.status} ${response.statusText}`);
         }
-        let textContent = await response.text();
+        let textContent = await response.text(); // Jina usually returns text or markdown
         
         if (textContent.length > MAX_INPUT_CHAR_LENGTH_FOR_FLOW) {
           textContent = textContent.substring(0, MAX_INPUT_CHAR_LENGTH_FOR_FLOW);
-          console.warn(`Flow: URLからのコンテンツが長すぎたため、約${MAX_INPUT_CHAR_LENGTH_FOR_FLOW.toLocaleString()}文字に切り詰められました。`);
+          backendTruncationWarning = `URLからのコンテンツが長すぎたため、約${MAX_INPUT_CHAR_LENGTH_FOR_FLOW.toLocaleString()}文字に切り詰められました。`;
+          console.warn(`Flow: ${backendTruncationWarning}`);
         }
-        contentToProcess = textContent;
+        processedInputValue = textContent;
+        isMediaInput = false; // URL content is processed as text for the LLM
       } catch (e: any) {
         console.error("Flow: URLコンテンツの処理エラー:", e);
-        // Fallback: Pass an error message or the URL itself if fetching fails.
-        // The LLM might not handle raw URLs well if it expects text.
-        contentToProcess = `URLコンテンツの取得に失敗しました: ${flowInput.inputValue}. エラー: ${e.message}`;
+        processedInputValue = `URLコンテンツの取得に失敗しました: ${flowInput.inputValue}. エラー: ${e.message}`;
+        isMediaInput = false;
       }
-    } else if (flowInput.inputType === 'file' || flowInput.inputType === 'text') {
-      // For 'file', client has already read content and sent as text.
-      if (flowInput.inputValue.length > MAX_INPUT_CHAR_LENGTH_FOR_FLOW) {
-        contentToProcess = flowInput.inputValue.substring(0, MAX_INPUT_CHAR_LENGTH_FOR_FLOW);
-        console.warn(`Flow: ${flowInput.inputType} 入力が長すぎたため、約${MAX_INPUT_CHAR_LENGTH_FOR_FLOW.toLocaleString()}文字に切り詰められました。`);
+    } else if (originalInputType === 'file') {
+      // Client sends data URI for images/PDFs, or text for .txt/.md
+      if (typeof flowInput.inputValue === 'string' && flowInput.inputValue.startsWith('data:')) {
+        // It's a data URI (image or PDF from client)
+        processedInputValue = flowInput.inputValue; // Pass the data URI directly
+        isMediaInput = true;
+        // MAX_INPUT_CHAR_LENGTH_FOR_FLOW does not apply to data URIs here.
+        // Gemini will handle its own size limits for media.
+      } else if (typeof flowInput.inputValue === 'string') {
+        // It's text content from a .txt or .md file (or unsupported parsed as text by client)
+        processedInputValue = flowInput.inputValue;
+        if (processedInputValue.length > MAX_INPUT_CHAR_LENGTH_FOR_FLOW) {
+          processedInputValue = processedInputValue.substring(0, MAX_INPUT_CHAR_LENGTH_FOR_FLOW);
+          backendTruncationWarning = `ファイル入力 (${originalInputType}) が長すぎたため、約${MAX_INPUT_CHAR_LENGTH_FOR_FLOW.toLocaleString()}文字に切り詰められました。`;
+          console.warn(`Flow: ${backendTruncationWarning}`);
+        }
+        isMediaInput = false;
+      } else {
+        // This case should ideally not be reached if client prepares data correctly
+        processedInputValue = "ファイル処理エラー: 無効なファイルデータ形式です。";
+        isMediaInput = false;
       }
+    } else if (originalInputType === 'text') {
+      // Raw text input from user
+      processedInputValue = flowInput.inputValue;
+      if (processedInputValue.length > MAX_INPUT_CHAR_LENGTH_FOR_FLOW) {
+        processedInputValue = processedInputValue.substring(0, MAX_INPUT_CHAR_LENGTH_FOR_FLOW);
+        backendTruncationWarning = `テキスト入力が長すぎたため、約${MAX_INPUT_CHAR_LENGTH_FOR_FLOW.toLocaleString()}文字に切り詰められました。`;
+        console.warn(`Flow: ${backendTruncationWarning}`);
+      }
+      isMediaInput = false;
     }
 
      const optionsWithDefaults: GenOptionsType = {
@@ -129,15 +168,22 @@ const generateFlashcardsFlow = ai.defineFlow(
        additionalPrompt: flowInput.generationOptions?.additionalPrompt || '',
      };
      
-     // Prepare input for the prompt: use original inputType for context, but processed content for inputValue
+     // This object must match GenerateFlashcardsPromptInputSchema
      const effectiveInputForPrompt = { 
-        ...flowInput, 
-        inputType: originalInputTypeForPrompt, // For the `{{{inputType}}}` field in prompt
-        inputValue: contentToProcess,         // For the `{{{inputValue}}}` field (the actual content)
-        generationOptions: optionsWithDefaults 
+        inputType: originalInputType,
+        inputValue: processedInputValue,
+        generationOptions: optionsWithDefaults,
+        isMediaInput: isMediaInput, 
     };
 
-    const {output} = await prompt(effectiveInputForPrompt);
+    const {output} = await prompt(effectiveInputForPrompt as z.infer<typeof GenerateFlashcardsPromptInputSchema>);
+    
+    // If backendTruncationWarning exists, we could potentially add it to the output
+    // For now, it's logged. Client handles its own truncation warnings.
+    // if (output && backendTruncationWarning) {
+    //   (output as GenerateFlashcardsOutput).warningMessage = backendTruncationWarning;
+    // }
+    
     return output!;
   }
 );
