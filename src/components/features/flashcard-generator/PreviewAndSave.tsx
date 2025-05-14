@@ -5,7 +5,6 @@ import React from 'react';
 import { useStore } from '@/lib/store';
 import { GeneratedCard } from './GeneratedCard';
 import { Label } from '@/components/ui/label';
-// import { Input } from '@/components/ui/input'; // Replaced by Combobox for theme
 import { Combobox, type ComboboxOption } from '@/components/ui/combobox';
 import { TagInput } from '@/components/shared/TagInput';
 import { Button } from '@/components/ui/button';
@@ -13,6 +12,9 @@ import { PlusCircle } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Info } from 'lucide-react';
+import { Input } from '@/components/ui/input'; 
+import { Separator } from '@/components/ui/separator';
+
 
 export function PreviewAndSave() {
     const {
@@ -27,8 +29,8 @@ export function PreviewAndSave() {
         cardSetTags,
         setCardSetTags,
         isLoading,
-        availableThemes, // Get available themes from store
-        availableTags    // Get available tags from store
+        availableThemes,
+        availableTags
     } = useStore((state) => ({
         previewCards: state.generate.previewCards,
         updatePreviewCard: state.generate.updatePreviewCard,
@@ -63,7 +65,7 @@ export function PreviewAndSave() {
                         value={cardSetName}
                         onChange={(e) => setCardSetName(e.target.value)}
                         required
-                        className="mt-1" // Added for consistency
+                        className="mt-1"
                     />
                 </div>
                 <div>
@@ -86,13 +88,13 @@ export function PreviewAndSave() {
                          value={cardSetTags}
                          onChange={setCardSetTags}
                          placeholder="Enterキーまたはコンマでタグを追加..."
-                         availableTags={availableTags} // Pass available tags for suggestions
+                         availableTags={availableTags}
                          className="mt-1"
                      />
                  </div>
             </div>
 
-             <hr/>
+            <Separator />
 
              {/* Card Preview List */}
              <div className="space-y-4">
@@ -114,11 +116,11 @@ export function PreviewAndSave() {
                 )}
 
                 {previewCards.length > 0 && (
-                    <ScrollArea className="h-[400px] pr-4"> {/* Adjust height as needed */}
+                    <ScrollArea className="h-[400px] pr-4">
                         <div className="space-y-4">
                         {previewCards.map((card, index) => (
                              <GeneratedCard
-                                key={card.id || index} // Use card.id if available, otherwise index
+                                key={card.id || index}
                                 index={index}
                                 card={card}
                                 onUpdate={updatePreviewCard}
@@ -132,7 +134,3 @@ export function PreviewAndSave() {
         </div>
     );
 }
-
-// Need to re-add Input if it was removed and is used elsewhere, or make sure it's used correctly.
-// For this specific case, Input for cardSetName is fine.
-import { Input } from '@/components/ui/input'; 

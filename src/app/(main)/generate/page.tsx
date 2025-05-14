@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useContext } from 'react';
@@ -14,6 +15,7 @@ import type { CardSet } from '@/types';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Terminal, Info } from 'lucide-react';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 export default function GeneratePage() {
   const { toast } = useToast();
@@ -24,7 +26,7 @@ export default function GeneratePage() {
     generateState,
     isLoading,
     error,
-    warningMessage, // Added warningMessage
+    warningMessage,
     previewCards,
     cardSetName,
     cardSetTheme,
@@ -35,7 +37,7 @@ export default function GeneratePage() {
     generateState: state.generate,
     isLoading: state.generate.isLoading,
     error: state.generate.error,
-    warningMessage: state.generate.warningMessage, // Get warningMessage from store
+    warningMessage: state.generate.warningMessage,
     previewCards: state.generate.previewCards,
     cardSetName: state.generate.cardSetName,
     cardSetTheme: state.generate.cardSetTheme,
@@ -48,7 +50,6 @@ export default function GeneratePage() {
     await generatePreview();
     if (storeApi) {
       const currentError = storeApi.getState().generate.error;
-      // Warning messages are handled by the Alert component below, no separate toast needed for warnings.
       if (currentError) {
           toast({ variant: "destructive", title: "生成失敗", description: currentError });
       }
@@ -99,7 +100,7 @@ export default function GeneratePage() {
 
        {warningMessage && !isLoading && (
          <Alert variant="default" className="mb-4 bg-yellow-100 border-yellow-400 text-yellow-700 dark:bg-yellow-900/30 dark:border-yellow-600 dark:text-yellow-300">
-           <Info className="h-4 w-4 text-yellow-700 dark:text-yellow-300" /> {/* Adjusted icon color */}
+           <Info className="h-4 w-4 text-yellow-700 dark:text-yellow-300" />
            <AlertTitle>注意</AlertTitle>
            <AlertDescription>{warningMessage}</AlertDescription>
          </Alert>
@@ -113,31 +114,37 @@ export default function GeneratePage() {
          </Alert>
        )}
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-1 space-y-6">
-           <Card>
-             <CardHeader>
-               <CardTitle>1. コンテンツを提供</CardTitle>
-             </CardHeader>
-             <CardContent>
-               <InputArea />
-             </CardContent>
-           </Card>
-           <Card>
-              <CardHeader>
-                  <CardTitle>2. オプションを設定</CardTitle>
-              </CardHeader>
-              <CardContent>
-                 <GenerationOptions />
-              </CardContent>
-           </Card>
-             <Button onClick={handleGeneratePreview} disabled={isLoading || !generateState.inputType || !generateState.inputValue} className="w-full">
-               {isLoading ? <LoadingSpinner size={16} className="mr-2"/> : null}
-               {isLoading ? '生成中...' : '3. プレビューを生成'}
-             </Button>
+      <div className="grid grid-cols-1 gap-x-6 lg:grid-cols-3">
+        <div className="lg:col-span-1 lg:sticky lg:top-20 self-start max-h-[calc(100vh-theme(spacing.20)-theme(spacing.6))] flex flex-col">
+           <ScrollArea className="flex-grow pr-2"> {/* pr-2 for scrollbar visibility if content pushes against edge */}
+             <div className="space-y-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>1. コンテンツを提供</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <InputArea />
+                  </CardContent>
+                </Card>
+                <Card>
+                   <CardHeader>
+                       <CardTitle>2. オプションを設定</CardTitle>
+                   </CardHeader>
+                   <CardContent>
+                      <GenerationOptions />
+                   </CardContent>
+                </Card>
+             </div>
+           </ScrollArea>
+           <div className="mt-auto pt-6 pb-1 pr-2"> {/* Added pb-1 and pr-2 to match ScrollArea padding for alignment */}
+              <Button onClick={handleGeneratePreview} disabled={isLoading || !generateState.inputType || !generateState.inputValue} className="w-full">
+                {isLoading ? <LoadingSpinner size={16} className="mr-2"/> : null}
+                {isLoading ? '生成中...' : '3. プレビューを生成'}
+              </Button>
+           </div>
         </div>
 
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 mt-6 lg:mt-0">
             <Card>
                  <CardHeader>
                    <CardTitle>4. プレビューと保存</CardTitle>
