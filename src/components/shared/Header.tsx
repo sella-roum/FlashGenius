@@ -18,7 +18,7 @@ const navigation = [
   { name: 'ダッシュボード', href: '/dashboard', icon: LayoutDashboard },
   { name: '生成', href: '/generate', icon: PlusSquare },
   { name: 'ライブラリ', href: '/library', icon: Boxes },
-  { name: '学習', href: '/study', icon: BookOpen },
+  // { name: '学習', href: '/study', icon: BookOpen }, // Removed study link
 ];
 
 export function Header() {
