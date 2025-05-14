@@ -1,3 +1,4 @@
+
 import React from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,8 +14,9 @@ interface RecentActivityProps {
 
 export function RecentActivity({ cardSets = [] }: RecentActivityProps) {
   // Sort by creation date descending and take top 5
-  const recentSets = cardSets
-    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+  // Create a mutable copy of the array before sorting
+  const recentSets = [...cardSets]
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .slice(0, 5);
 
   if (recentSets.length === 0) {
