@@ -3,7 +3,7 @@ import { createContext, useContext } from 'react';
 import { createStore, useStore as useZustandStore, type StoreApi } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import type { CardSet, Flashcard, GenerationOptions, Tag } from '@/types';
-import { API_ENDPOINTS, MAX_FILE_SIZE_BYTES, ACCEPTED_MIME_TYPES } from '@/lib/constants'; // Removed JINA_READER_URL_PREFIX
+import { API_ENDPOINTS, MAX_FILE_SIZE_BYTES, ACCEPTED_MIME_TYPES, JINA_READER_URL_PREFIX } from '@/lib/constants';
 import type { GenerateFlashcardsInput, GenerateFlashcardsOutput } from '@/ai/flows/generate-flashcards';
 import type { ProvideDetailedExplanationInput } from '@/ai/flows/provide-detailed-explanations';
 import type { RequestAiGeneratedHintInput } from '@/ai/flows/provide-study-hints';
@@ -228,7 +228,7 @@ export const initializeStore = (initProps?: Partial<Store>): StoreApi<Store> => 
         }),
         generatePreview: async () => {
           const { inputType, inputValue, generationOptions } = get().generate;
-          if (!inputType || (!inputValue && typeof inputValue !== 'string')) { // Allow empty string for text/URL input
+          if (!inputType || (!inputValue && typeof inputValue !== 'string')) {
             set((state) => { state.generate.error = '入力タイプと入力値は必須です。'; });
             return;
           }
@@ -240,15 +240,15 @@ export const initializeStore = (initProps?: Partial<Store>): StoreApi<Store> => 
             state.generate.warningMessage = null;
           });
 
-          const MAX_INPUT_CHAR_LENGTH = 500000; // Max characters for text content
+          const MAX_INPUT_CHAR_LENGTH = 500000;
           let wasTruncated = false;
           let finalApiInputValue: string;
-          let finalApiInputType: 'file' | 'text'; // 'url' will be converted to 'text'
+          let finalApiInputType: 'file' | 'text';
 
           try {
             if (inputType === 'file' && inputValue instanceof File) {
               const file = inputValue;
-              finalApiInputType = 'file'; // Stays 'file' for backend to differentiate data URI vs text content from file
+              finalApiInputType = 'file';
               if (['image/jpeg', 'image/png', 'image/webp', 'application/pdf'].includes(file.type)) {
                 finalApiInputValue = await new Promise((resolve, reject) => {
                   const reader = new FileReader();
@@ -273,12 +273,15 @@ export const initializeStore = (initProps?: Partial<Store>): StoreApi<Store> => 
                 set((state) => { state.generate.error = 'URLを入力してください。'; state.generate.isLoading = false; });
                 return;
               }
-              // Fetch URL content via backend proxy
               console.log(`Frontend: URL「${inputValue}」のコンテンツをバックエンド経由で取得しています`);
-              const proxyResponse = await fetch(`/api/fetch-url-content?url=${encodeURIComponent(inputValue)}`);
+              const proxyResponse = await fetch(`${API_ENDPOINTS.FETCH_URL_CONTENT}?url=${encodeURIComponent(inputValue)}`);
               if (!proxyResponse.ok) {
                   const errorData = await proxyResponse.json();
-                  throw new Error(errorData.error || `バックエンドプロキシ経由でのURLコンテンツ取得に失敗しました: ${proxyResponse.status} ${proxyResponse.statusText}`);
+                  let errorMessage = errorData.details || errorData.error || `バックエンドプロキシ経由でのURLコンテンツ取得に失敗しました: ${proxyResponse.status} ${proxyResponse.statusText}`;
+                  if (proxyResponse.status === 503) { // Jina might also return 503
+                    errorMessage = "コンテンツ取得サービスが混み合っています。しばらくしてからもう一度お試しください。";
+                  }
+                  throw new Error(errorMessage);
               }
               const proxyResult = await proxyResponse.json();
               let textContent = proxyResult.content;
@@ -288,7 +291,7 @@ export const initializeStore = (initProps?: Partial<Store>): StoreApi<Store> => 
                 wasTruncated = true;
               }
               finalApiInputValue = textContent;
-              finalApiInputType = 'text'; // URL content is now treated as text for the backend
+              finalApiInputType = 'text';
             } else if (inputType === 'text' && typeof inputValue === 'string') {
               finalApiInputValue = inputValue;
               if (finalApiInputValue.length > MAX_INPUT_CHAR_LENGTH) {
@@ -318,7 +321,13 @@ export const initializeStore = (initProps?: Partial<Store>): StoreApi<Store> => 
 
             if (!backendResponse.ok) {
               const errorData = await backendResponse.json();
-              throw new Error(errorData.error || `APIエラー: ${backendResponse.statusText}`);
+              let errorMessage = errorData.error || `APIエラー: ${backendResponse.statusText} (${backendResponse.status})`;
+              if (backendResponse.status === 503) {
+                errorMessage = "AIカード生成サービスが現在混み合っています。しばらくしてからもう一度お試しください。";
+              } else if (backendResponse.status === 400 && errorData.error?.includes("token")) {
+                errorMessage = "入力コンテンツが長すぎるため、AIが処理できませんでした。より短いテキストでお試しください。";
+              }
+              throw new Error(errorMessage);
             }
 
             const result: GenerateFlashcardsOutput = await backendResponse.json();
@@ -326,7 +335,7 @@ export const initializeStore = (initProps?: Partial<Store>): StoreApi<Store> => 
 
             set((state) => {
               state.generate.previewCards = cardsWithIds;
-              if (wasTruncated && !state.generate.warningMessage) { // Only set truncation warning if not already set (e.g. by unsupported file type)
+              if (wasTruncated && !state.generate.warningMessage) {
                 state.generate.warningMessage = `入力コンテンツが長すぎたため、最初の約${MAX_INPUT_CHAR_LENGTH.toLocaleString()}文字に切り詰められました。`;
               }
             });
@@ -457,15 +466,11 @@ export const initializeStore = (initProps?: Partial<Store>): StoreApi<Store> => 
              if (state.study.currentCard) {
                 state.study.isFrontVisible = !state.study.isFrontVisible;
                 if (state.study.isFrontVisible) { // Switched to Front
-                    // If hint was already generated and cached on card, use it
-                    // If details were visible, they are now hidden implicitly by card flip
                     state.study.currentHint = state.study.currentCard?.hint || null;
-                    state.study.currentDetails = null; // Ensure details aren't shown on front
+                    state.study.currentDetails = null; 
                 } else { // Switched to Back
-                    // If details were already generated and cached on card, use them
-                    // If hint was visible, it's now hidden implicitly by card flip
                     state.study.currentDetails = state.study.currentCard?.details || null;
-                    state.study.currentHint = null; // Ensure hint isn't shown on back
+                    state.study.currentHint = null; 
                 }
             }
          }),
@@ -476,11 +481,10 @@ export const initializeStore = (initProps?: Partial<Store>): StoreApi<Store> => 
                 const newCard = state.study.currentDeck[nextIndex];
                 state.study.currentCard = newCard;
                 state.study.isFrontVisible = true;
-                state.study.currentHint = newCard.hint || null; // Use cached hint if available
-                state.study.currentDetails = null; // Details are for back, clear when moving to new card front
+                state.study.currentHint = newCard.hint || null; 
+                state.study.currentDetails = null; 
             } else {
-                // End of deck
-                state.study.currentCardIndex = -1; // Or a special "completed" state
+                state.study.currentCardIndex = -1; 
                 state.study.currentCard = null;
                 state.study.isFrontVisible = true;
                 state.study.currentHint = null;
@@ -497,8 +501,8 @@ export const initializeStore = (initProps?: Partial<Store>): StoreApi<Store> => 
                 const newCard = state.study.currentDeck[prevIndex];
                 state.study.currentCard = newCard;
                 state.study.isFrontVisible = true;
-                state.study.currentHint = newCard.hint || null; // Use cached hint
-                state.study.currentDetails = null; // Clear details
+                state.study.currentHint = newCard.hint || null; 
+                state.study.currentDetails = null; 
                 state.study.isHintLoading = false;
                 state.study.isDetailsLoading = false;
                 state.study.error = null;
@@ -509,10 +513,9 @@ export const initializeStore = (initProps?: Partial<Store>): StoreApi<Store> => 
 
            if (!cardFromGet || !isFrontVisible || (currentIsHintLoading && !forceRegenerate)) return;
 
-            // If not forcing regeneration AND (a hint is already cached on the card OR a hint is in currentHint state), use it.
             if (!forceRegenerate && (cardFromGet.hint || existingCurrentHint)) {
                 const hintToUse = existingCurrentHint || cardFromGet.hint;
-                if (hintToUse) { // Ensure there's actually a hint
+                if (hintToUse) {
                     set(state => { state.study.currentHint = hintToUse; state.study.isHintLoading = false; state.study.error = null; });
                     return;
                 }
@@ -522,11 +525,17 @@ export const initializeStore = (initProps?: Partial<Store>): StoreApi<Store> => 
            try {
                const input: RequestAiGeneratedHintInput = { front: cardFromGet.front, back: cardFromGet.back };
                 const response = await fetch(API_ENDPOINTS.GENERATE_HINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input) });
-                 if (!response.ok) { const errorData = await response.json(); throw new Error(errorData.error || `APIエラー: ${response.statusText}`); }
+                 if (!response.ok) { 
+                    const errorData = await response.json(); 
+                    let errorMessage = errorData.error || `APIエラー: ${response.statusText} (${response.status})`;
+                    if (response.status === 503) {
+                        errorMessage = "AIヒントサービスが現在混み合っています。しばらくしてからもう一度お試しください。";
+                    }
+                    throw new Error(errorMessage); 
+                }
                 const result = await response.json();
                set(state => {
                  state.study.currentHint = result.hint;
-                 // Cache the generated hint on the card object itself for persistence during the session
                  const cardId = state.study.currentCard?.id;
                  if (cardId) {
                     const updateCardCache = (c: Flashcard) => { if (c.id === cardId) c.hint = result.hint; };
@@ -545,7 +554,7 @@ export const initializeStore = (initProps?: Partial<Store>): StoreApi<Store> => 
         hideHint: () => set((state) => { state.study.currentHint = null; }),
         fetchDetails: async (forceRegenerate = false) => {
            const { currentCard: cardFromGet, isDetailsLoading: currentIsDetailsLoading, currentDetails: existingCurrentDetails, isFrontVisible } = get().study;
-           if (!cardFromGet || isFrontVisible || (currentIsDetailsLoading && !forceRegenerate)) return; // Only fetch if on back side
+           if (!cardFromGet || isFrontVisible || (currentIsDetailsLoading && !forceRegenerate)) return;
 
             if (!forceRegenerate && (cardFromGet.details || existingCurrentDetails)) {
                  const detailsToUse = existingCurrentDetails || cardFromGet.details;
@@ -559,11 +568,17 @@ export const initializeStore = (initProps?: Partial<Store>): StoreApi<Store> => 
            try {
                const input: ProvideDetailedExplanationInput = { front: cardFromGet.front, back: cardFromGet.back };
                  const response = await fetch(API_ENDPOINTS.GENERATE_DETAILS, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input) });
-                 if (!response.ok) { const errorData = await response.json(); throw new Error(errorData.error || `APIエラー: ${response.statusText}`); }
+                 if (!response.ok) { 
+                    const errorData = await response.json(); 
+                    let errorMessage = errorData.error || `APIエラー: ${response.statusText} (${response.status})`;
+                    if (response.status === 503) {
+                        errorMessage = "AI詳細解説サービスが現在混み合っています。しばらくしてからもう一度お試しください。";
+                    }
+                    throw new Error(errorMessage);
+                }
                  const result = await response.json();
                set(state => {
                  state.study.currentDetails = result.details;
-                 // Cache the generated details on the card object
                  const cardId = state.study.currentCard?.id;
                  if (cardId) {
                     const updateCardCache = (c: Flashcard) => { if (c.id === cardId) c.details = result.details; };
@@ -587,8 +602,8 @@ export const initializeStore = (initProps?: Partial<Store>): StoreApi<Store> => 
              const newCard = newShuffledDeck.length > 0 ? newShuffledDeck[0] : null;
              state.study.currentCard = newCard;
              state.study.isFrontVisible = true;
-             state.study.currentHint = newCard?.hint || null; // Use cached hint
-             state.study.currentDetails = null; // Clear details
+             state.study.currentHint = newCard?.hint || null; 
+             state.study.currentDetails = null; 
              state.study.isHintLoading = false;
              state.study.isDetailsLoading = false;
              state.study.error = null;
